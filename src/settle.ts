@@ -43,6 +43,18 @@ export type SettleFailure = {
 }
 
 /**
+ * The reasons that mean the facilitator did NOT refuse the payment: it never
+ * answered, broke, or answered something unreadable. The on-chain transfer may
+ * have landed anyway, so a caller must not be invited to retry — a retry is a
+ * second signature over a fresh nonce, which is a second payment.
+ */
+export const INDETERMINATE_REASONS: ReadonlySet<string> = new Set([
+  'facilitator_timeout',
+  'facilitator_unavailable',
+  'malformed_response',
+])
+
+/**
  * `/settle` waits for on-chain confirmation, and the facilitator gives up at its
  * own 60 s write deadline — so nothing useful arrives after that. undici's default
  * is 300 s, which would hold a buyer's request open for five minutes against a
@@ -110,7 +122,12 @@ export async function settle(args: {
   if (!res.ok) {
     return {
       ok: false,
-      reason: 'invalid_request',
+      // A 4xx is the facilitator saying the request was bad, and it is the only
+      // status class that means that. A 5xx says the facilitator broke while
+      // handling a request that may have been perfectly good — telling a merchant
+      // their envelope is malformed during someone else's outage sends them
+      // debugging their own correct code.
+      reason: res.status >= 500 ? 'facilitator_unavailable' : 'invalid_request',
       message: body?.errorMessage ?? body?.errorReason ?? `facilitator answered ${res.status}`,
     }
   }

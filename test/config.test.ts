@@ -80,6 +80,9 @@ describe('the start script', () => {
     const pkg = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
     ) as { scripts: { start: string } }
-    expect(pkg.scripts.start).toMatch(/--env-file(-if-exists)?=\.env\b/)
+    // `-if-exists`, not plain `--env-file`: the plain flag makes a missing `.env`
+    // a hard `node: .env: not found`, so a merchant using real environment
+    // variables instead of a file could not start the server at all.
+    expect(pkg.scripts.start).toMatch(/--env-file-if-exists=\.env\b/)
   })
 })

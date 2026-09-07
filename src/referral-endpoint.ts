@@ -1,7 +1,12 @@
 import { Hono } from 'hono'
 import type { Address, Config } from './config.ts'
 import { build402, buildRequirements } from './payment-requirements.ts'
-import { decodePaymentHeader, PAYMENT_HEADER, settle } from './settle.ts'
+import {
+  decodePaymentHeader,
+  INDETERMINATE_REASONS,
+  PAYMENT_HEADER,
+  settle,
+} from './settle.ts'
 
 /**
  * The referral route. One handler, registered on both methods, with exactly one
@@ -66,7 +71,13 @@ export function referralApp(
           requiredAuthorizationType: result.requiredAuthorizationType,
           setup_url: result.setup_url,
         },
-        402,
+        // 402 asks the buyer to pay, so only a refusal — the facilitator answered
+        // and said no — may use it. When the facilitator did not answer, the
+        // transfer may still be landing, and a buyer that reads a refusal re-signs
+        // over a fresh nonce and pays twice. 504 says what is actually true: the
+        // outcome is unknown. `ok: false` either way, so the product is never
+        // served on an unconfirmed payment.
+        INDETERMINATE_REASONS.has(result.reason) ? 504 : 402,
       )
     }
 

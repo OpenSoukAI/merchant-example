@@ -165,6 +165,26 @@ describe('settle', () => {
     })
   })
 
+  it('calls a 5xx an outage, not a bad envelope', async () => {
+    // A proxy's own error page: the facilitator broke handling a request that may
+    // have been perfectly good. Reporting `invalid_request` here sends a merchant
+    // debugging their own correct envelope during someone else's outage.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response('<html>502 Bad Gateway</html>', { status: 502 }))
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'facilitator_unavailable',
+      message: 'facilitator answered 502',
+    })
+  })
+
   it('names the status when a 400 body carries no explanation at all', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, 400))
     const result = await settle({

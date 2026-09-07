@@ -1,6 +1,6 @@
 # merchant-example
 
-A worked OpenSouk referral endpoint, in about 200 lines of TypeScript.
+A worked OpenSouk referral endpoint, in seven small TypeScript modules.
 
 Start with the [merchant quickstart](https://docs.opensouk.ai/quickstart/merchant) — it is
 the integration end to end. This repo is the executable version of it.
@@ -69,8 +69,9 @@ curl -s -X POST localhost:8083/buy/referral | jq '.accepts[0].payTo, .extensions
 }
 ```
 
-(`payTo` above came from a local registry read during testing — resolved, not configured, per
-point 2 above.)
+(`payTo` above is anvil account #1. It came from a local registry read during testing —
+resolved, not configured, per point 2 above — and like every address in this repo it is a
+placeholder, not somewhere to send money.)
 
 ## What this example does not do
 

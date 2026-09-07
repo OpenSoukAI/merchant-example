@@ -23,6 +23,7 @@ type PaymentRequiredBody = {
   extensions?: { attributionToken?: string; buyerAgentId?: string }
 }
 type SettleErrorBody = {
+  success?: boolean
   errorReason: string
   retryable?: boolean
   requiredAuthorizationType?: string
@@ -80,6 +81,38 @@ describe('the referral endpoint', () => {
     })
     expect(res.status).toBe(402)
     expect(((await res.json()) as SettleErrorBody).errorReason).toBe('invalid_payment')
+  })
+
+  it('separates "unknown" from "refused" by status, not by a reason string', async () => {
+    // A timed-out settle may still be landing on-chain. Answering 402 — the status
+    // that asks for payment — invites the buyer to re-sign over a fresh nonce and
+    // pay a second time, so the indeterminate case gets 504 and only a real
+    // refusal gets 402. Neither serves the product.
+    const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
+    const send = (fetchImpl: unknown) =>
+      app(fetchImpl as never).request('/buy/referral', {
+        method: 'POST',
+        headers: { 'PAYMENT-SIGNATURE': payment },
+      })
+
+    const timedOut = await send(
+      vi.fn().mockRejectedValue(new DOMException('This operation was aborted', 'TimeoutError')),
+    )
+    const refused = await send(
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: false, errorReason: 'invalid_payment' }), {
+          status: 200,
+        }),
+      ),
+    )
+
+    expect(timedOut.status).toBe(504)
+    expect(refused.status).toBe(402)
+    expect((await timedOut.json()) as SettleErrorBody).toMatchObject({
+      success: false,
+      errorReason: 'facilitator_timeout',
+    })
+    expect(await refused.json()).not.toMatchObject({ ok: true })
   })
 
   it('forwards a retryable rejection to the buyer, hint and all', async () => {
