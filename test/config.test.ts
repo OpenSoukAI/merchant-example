@@ -46,16 +46,18 @@ describe('loadConfig', () => {
   })
 
   it('sorts the missing list, whatever order the code declares them in', () => {
-    // REQUIRED is declared non-alphabetically on purpose. Omit two variables whose
-    // declaration order is the reverse of their alphabetical order, so this fails
-    // if `.sort()` is ever removed.
-    const { MERCHANT_USDC: _usdc, MERCHANT_ADDRESS_REGISTRY: _registry, ...rest } = complete
+    // REQUIRED is declared non-alphabetically on purpose. These two are declared
+    // USDC-then-NETWORK and sort NETWORK-then-USDC, so this test fails if `.sort()`
+    // is ever removed.
+    const { MERCHANT_USDC: _u, MERCHANT_NETWORK: _n, ...rest } = complete
     try {
       loadConfig(rest)
       throw new Error('expected loadConfig to throw')
     } catch (err) {
+      // USDC is declared BEFORE NETWORK but sorts AFTER it, so without `.sort()`
+      // this comes back as [USDC, NETWORK] and the assertion fails.
       expect((err as MissingConfigError).missing).toEqual([
-        'MERCHANT_ADDRESS_REGISTRY',
+        'MERCHANT_NETWORK',
         'MERCHANT_USDC',
       ])
     }
