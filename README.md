@@ -2,7 +2,7 @@
 
 A worked OpenSouk referral endpoint, in about 200 lines of TypeScript.
 
-Start with the [merchant quickstart](https://opensoukdocs.netlify.app/quickstart/merchant) — it is
+Start with the [merchant quickstart](https://docs.opensouk.ai/quickstart/merchant) — it is
 the integration end to end. This repo is the executable version of it.
 
 ## Requirements
