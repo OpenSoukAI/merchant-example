@@ -27,15 +27,18 @@ export class MissingConfigError extends Error {
   }
 }
 
+// Deliberately NOT in alphabetical order: `loadConfig` sorts the missing list, and
+// a list already sorted here would let that sort be deleted without any test
+// noticing (ruling R10). Order here is grouped by what a reader configures first.
 const REQUIRED = [
+  'MERCHANT_RPC_URL',
   'MERCHANT_ADDRESS_REGISTRY',
-  'MERCHANT_DIRECT_PAY_TO',
-  'MERCHANT_FACILITATOR_URL',
+  'MERCHANT_USDC',
   'MERCHANT_NETWORK',
   'MERCHANT_PRICE_BASE_UNITS',
+  'MERCHANT_FACILITATOR_URL',
   'MERCHANT_PUBLIC_URL',
-  'MERCHANT_RPC_URL',
-  'MERCHANT_USDC',
+  'MERCHANT_DIRECT_PAY_TO',
 ] as const
 
 export function loadConfig(env: Record<string, string | undefined>): Config {

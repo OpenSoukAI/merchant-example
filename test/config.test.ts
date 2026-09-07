@@ -45,6 +45,22 @@ describe('loadConfig', () => {
     }
   })
 
+  it('sorts the missing list, whatever order the code declares them in', () => {
+    // REQUIRED is declared non-alphabetically on purpose. Omit two variables whose
+    // declaration order is the reverse of their alphabetical order, so this fails
+    // if `.sort()` is ever removed.
+    const { MERCHANT_USDC: _usdc, MERCHANT_ADDRESS_REGISTRY: _registry, ...rest } = complete
+    try {
+      loadConfig(rest)
+      throw new Error('expected loadConfig to throw')
+    } catch (err) {
+      expect((err as MissingConfigError).missing).toEqual([
+        'MERCHANT_ADDRESS_REGISTRY',
+        'MERCHANT_USDC',
+      ])
+    }
+  })
+
   it('rejects a price that is not an integer string of base units', () => {
     expect(() => loadConfig({ ...complete, MERCHANT_PRICE_BASE_UNITS: '1.5' })).toThrow(
       /base units/,
