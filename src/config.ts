@@ -15,6 +15,14 @@ export type Config = {
   /** USDC base units, 6 decimals. A string because a uint256 does not survive a JSON number. */
   priceBaseUnits: string
   facilitatorUrl: string
+  /**
+   * The protocol API's base URL — NOT the facilitator's. The onboarding manifest
+   * at `/.well-known/referrer-agent` is served by the API; the facilitator serves
+   * `/verify`, `/settle`, `/supported` and nothing under `/.well-known`, so
+   * deriving `setup_url` from `facilitatorUrl` yields a 404 for the one reader it
+   * exists for — a cold agent that has just failed to pay.
+   */
+  apiUrl: string
   publicUrl: string
   /** The wallet the merchant's own, untouched route is paid on. */
   directPayTo: Address
@@ -43,6 +51,7 @@ const REQUIRED = [
   'MERCHANT_NETWORK',
   'MERCHANT_PRICE_BASE_UNITS',
   'MERCHANT_FACILITATOR_URL',
+  'MERCHANT_API_URL',
   'MERCHANT_PUBLIC_URL',
   'MERCHANT_DIRECT_PAY_TO',
 ] as const
@@ -66,6 +75,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     network: env.MERCHANT_NETWORK as string,
     priceBaseUnits: price,
     facilitatorUrl: (env.MERCHANT_FACILITATOR_URL as string).replace(/\/$/, ''),
+    apiUrl: (env.MERCHANT_API_URL as string).replace(/\/$/, ''),
     publicUrl: (env.MERCHANT_PUBLIC_URL as string).replace(/\/$/, ''),
     directPayTo: env.MERCHANT_DIRECT_PAY_TO as Address,
   }

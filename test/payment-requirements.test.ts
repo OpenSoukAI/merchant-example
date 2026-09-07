@@ -9,6 +9,7 @@ const cfg = loadConfig({
   MERCHANT_NETWORK: 'eip155:8453',
   MERCHANT_PRICE_BASE_UNITS: '1000000',
   MERCHANT_FACILITATOR_URL: 'http://127.0.0.1:8082',
+  MERCHANT_API_URL: 'http://127.0.0.1:8080',
   MERCHANT_PUBLIC_URL: 'https://api.example.com',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
 })
@@ -69,11 +70,15 @@ describe('build402', () => {
     expect('buyerAgentId' in body.extensions).toBe(false)
   })
 
-  it('points setup_url at the facilitator manifest, for a buyer with no tooling', () => {
+  // This test used to assert the facilitator's host, and named it as the correct
+  // one. It is not: only the API serves /.well-known/referrer-agent, and against
+  // a live stack the facilitator answered 404 there while the API answered 200.
+  // The one reader setup_url exists for is a buyer that has just failed to pay,
+  // so a 404 dead-ends exactly the case the field is in the 402 to rescue.
+  it('points setup_url at the API, which is the only host serving the manifest', () => {
     const body = build402({ cfg, payTo: ROUTER, attributionToken: '', buyerAgentId: null })
-    expect(body.extensions.setup_url).toBe(
-      'http://127.0.0.1:8082/.well-known/referrer-agent',
-    )
+    expect(body.extensions.setup_url).toBe('http://127.0.0.1:8080/.well-known/referrer-agent')
+    expect(body.extensions.setup_url).not.toContain(cfg.facilitatorUrl)
   })
 
   it('names the referral route as the resource, which is the registered endpoint_url', () => {

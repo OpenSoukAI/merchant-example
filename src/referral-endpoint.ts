@@ -104,7 +104,14 @@ export function referralApp(
 
     // Settled. Serve whatever the paid route serves — unchanged from the direct
     // route, which is the point: the protocol does not touch your product code.
-    return c.json({ ok: true, resource: 'your paid response goes here' })
+    // `transaction` is the one addition the protocol requires on a 200: buyer
+    // tooling reads a 200 without it as a failed purchase, so omitting it makes
+    // every successful sale look like a failure after the money has moved.
+    return c.json({
+      ok: true,
+      transaction: result.transaction,
+      resource: 'your paid response goes here',
+    })
   })
 
   return app

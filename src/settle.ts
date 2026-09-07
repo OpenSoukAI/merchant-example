@@ -17,7 +17,20 @@ export function decodePaymentHeader(raw: string): unknown {
   }
 }
 
-export type SettleResult = { ok: true } | SettleFailure
+export type SettleResult = SettleSuccess | SettleFailure
+
+export type SettleSuccess = {
+  ok: true
+  /**
+   * The settle transaction hash, straight from the facilitator. The protocol's
+   * buyer tooling reads a 200 with no `transaction` as a FAILED purchase, so
+   * this is not decoration: dropping it turns every successful sale into an
+   * apparent failure for the buyer while the money has already moved.
+   */
+  transaction?: string
+  network?: string
+  payer?: string
+}
 
 export type SettleFailure = {
   ok: false
@@ -70,6 +83,10 @@ const SETTLE_TIMEOUT_MS = 60_000
  */
 type SettleResponse = {
   success?: boolean
+  /** Sent only on success: `{success, transaction, network, payer}`. */
+  transaction?: string
+  network?: string
+  payer?: string
   errorReason?: string
   errorMessage?: string
   setup_url?: string
@@ -138,7 +155,14 @@ export async function settle(args: {
       message: `facilitator answered ${res.status} with a body that is not JSON`,
     }
   }
-  if (body.success === true) return { ok: true }
+  if (body.success === true) {
+    return {
+      ok: true,
+      transaction: body.transaction,
+      network: body.network,
+      payer: body.payer,
+    }
+  }
   return {
     ok: false,
     // The facilitator's own reason, never a locally minted one: it is what the

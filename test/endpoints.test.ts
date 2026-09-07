@@ -9,6 +9,7 @@ const cfg = loadConfig({
   MERCHANT_NETWORK: 'eip155:8453',
   MERCHANT_PRICE_BASE_UNITS: '1000000',
   MERCHANT_FACILITATOR_URL: 'http://f',
+  MERCHANT_API_URL: 'http://api',
   MERCHANT_PUBLIC_URL: 'https://api.example.com',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
 })
@@ -53,6 +54,29 @@ describe('the referral endpoint', () => {
     const body = (await res.json()) as PaymentRequiredBody
     expect(body.extensions?.attributionToken).toBe('eyJ2Ijo0')
     expect(body.extensions?.buyerAgentId).toBe('7')
+  })
+
+  it('returns the settle transaction hash, which buyer tooling requires', async () => {
+    // A 200 with no `transaction` is read as a FAILED purchase by the protocol's
+    // buyer tooling, so dropping it makes every successful sale look like a
+    // failure after the money has already moved. Found against a live stack: the
+    // e2e driver printed an empty `tx=` on a purchase that had settled on-chain.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: true, transaction: '0xabc123', network: 'eip155:84532' }),
+        { status: 200 },
+      ),
+    )
+    const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
+    const res = await app(fetchImpl as unknown as typeof fetch).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()) as { transaction?: string }).toMatchObject({
+      ok: true,
+      transaction: '0xabc123',
+    })
   })
 
   it('serves the resource when the facilitator settles', async () => {

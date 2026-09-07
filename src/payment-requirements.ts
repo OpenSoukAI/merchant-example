@@ -72,7 +72,8 @@ export function build402(args: {
       // Omitted rather than empty: an absent id is what marks an agent-less
       // purchase, and the facilitator substitutes its own sentinel for it.
       ...(buyerAgentId === null ? {} : { buyerAgentId }),
-      setup_url: `${cfg.facilitatorUrl}/.well-known/referrer-agent`,
+      // The API host, never the facilitator's: only the API serves this manifest.
+      setup_url: `${cfg.apiUrl}/.well-known/referrer-agent`,
     },
   }
 }

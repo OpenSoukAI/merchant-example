@@ -10,6 +10,7 @@ const complete = {
   MERCHANT_NETWORK: 'eip155:8453',
   MERCHANT_PRICE_BASE_UNITS: '1000000',
   MERCHANT_FACILITATOR_URL: 'http://127.0.0.1:8082',
+  MERCHANT_API_URL: 'http://127.0.0.1:8080',
   MERCHANT_PUBLIC_URL: 'http://127.0.0.1:8083',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
 }
@@ -35,6 +36,7 @@ describe('loadConfig', () => {
       expect(err).toBeInstanceOf(MissingConfigError)
       expect((err as MissingConfigError).missing).toEqual([
         'MERCHANT_ADDRESS_REGISTRY',
+        'MERCHANT_API_URL',
         'MERCHANT_DIRECT_PAY_TO',
         'MERCHANT_FACILITATOR_URL',
         'MERCHANT_NETWORK',
