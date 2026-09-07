@@ -21,9 +21,15 @@ export type Config = {
 }
 
 export class MissingConfigError extends Error {
-  constructor(readonly missing: string[]) {
+  // Declared and assigned separately rather than as a constructor parameter
+  // property. A parameter property is not erasable syntax, so `node src/server.ts`
+  // cannot run it — Node strips types, it does not transform them (ruling R13).
+  readonly missing: string[]
+
+  constructor(missing: string[]) {
     super(`missing required environment variables: ${missing.join(', ')}`)
     this.name = 'MissingConfigError'
+    this.missing = missing
   }
 }
 

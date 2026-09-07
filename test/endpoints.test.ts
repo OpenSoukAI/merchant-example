@@ -16,11 +16,19 @@ const ROUTER = '0x4444444444444444444444444444444444444444'
 const app = (fetchImpl?: typeof fetch) =>
   createServer(cfg, { resolveSplitRouter: async () => ROUTER as never, fetchImpl })
 
+// Narrow shapes for `res.json()`, which types as `unknown` here (no DOM lib —
+// see ruling R14) — just enough of each body for the assertions that read it.
+type PaymentRequiredBody = {
+  accepts: [{ payTo: string }]
+  extensions?: { attributionToken?: string; buyerAgentId?: string }
+}
+type SettleErrorBody = { errorReason: string }
+
 describe('the referral endpoint', () => {
   it('answers 402 on POST, which is what buyer tooling sends', async () => {
     const res = await app().request('/buy/referral', { method: 'POST' })
     expect(res.status).toBe(402)
-    const body = (await res.json()) as any
+    const body = (await res.json()) as PaymentRequiredBody
     expect(body.accepts[0].payTo).toBe(ROUTER)
   })
 
@@ -28,7 +36,7 @@ describe('the referral endpoint', () => {
     // mock-merchant registers POST only and therefore reports as not ready.
     const res = await app().request('/buy/referral', { method: 'GET' })
     expect(res.status).toBe(402)
-    expect(((await res.json()) as any).accepts[0].payTo).toBe(ROUTER)
+    expect(((await res.json()) as PaymentRequiredBody).accepts[0].payTo).toBe(ROUTER)
   })
 
   it('echoes the referral headers into extensions', async () => {
@@ -36,9 +44,9 @@ describe('the referral endpoint', () => {
       method: 'GET',
       headers: { 'X-Referrer-Token': 'eyJ2Ijo0', 'X-Referrer-Buyer-Agent-Id': '7' },
     })
-    const body = (await res.json()) as any
-    expect(body.extensions.attributionToken).toBe('eyJ2Ijo0')
-    expect(body.extensions.buyerAgentId).toBe('7')
+    const body = (await res.json()) as PaymentRequiredBody
+    expect(body.extensions?.attributionToken).toBe('eyJ2Ijo0')
+    expect(body.extensions?.buyerAgentId).toBe('7')
   })
 
   it('serves the resource when the facilitator settles', async () => {
@@ -66,7 +74,7 @@ describe('the referral endpoint', () => {
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
     expect(res.status).toBe(402)
-    expect(((await res.json()) as any).errorReason).toBe('invalid_payment')
+    expect(((await res.json()) as SettleErrorBody).errorReason).toBe('invalid_payment')
   })
 
   it('ignores X-PAYMENT, the v1 header', async () => {
@@ -83,7 +91,7 @@ describe('the direct endpoint', () => {
   it('is paid on the merchant’s own wallet, untouched by any of this', async () => {
     const res = await app().request('/buy', { method: 'POST' })
     expect(res.status).toBe(402)
-    const body = (await res.json()) as any
+    const body = (await res.json()) as PaymentRequiredBody
     expect(body.accepts[0].payTo).toBe(cfg.directPayTo)
     expect(body.extensions).toBeUndefined()
   })
