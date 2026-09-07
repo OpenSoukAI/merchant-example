@@ -17,7 +17,30 @@ export function decodePaymentHeader(raw: string): unknown {
   }
 }
 
-export type SettleResult = { ok: true } | { ok: false; reason: string; message: string }
+export type SettleResult = { ok: true } | SettleFailure
+
+export type SettleFailure = {
+  ok: false
+  reason: string
+  message: string
+  /**
+   * The facilitator sets these two together, and only when the rejection is a
+   * signature made over TransferWithAuthorization: validation is off-chain, so
+   * nothing was sent and `authorizationState(buyer, nonce)` is still false, and
+   * re-signing the SAME authorization under `requiredAuthorizationType` settles.
+   * A caller branches on `retryable` rather than matching the message, which is
+   * why the facilitator sends it as a field (REF-269).
+   */
+  retryable?: boolean
+  requiredAuthorizationType?: string
+  /**
+   * The onboarding manifest, present on any rejection when the facilitator is
+   * configured with one — the breadcrumb for a buyer that arrived with no tooling
+   * (REF-133). Under the facilitator's own snake_case name, like the one in the
+   * 402's `extensions`.
+   */
+  setup_url?: string
+}
 
 /**
  * `/settle` waits for on-chain confirmation, and the facilitator gives up at its
@@ -37,6 +60,9 @@ type SettleResponse = {
   success?: boolean
   errorReason?: string
   errorMessage?: string
+  setup_url?: string
+  requiredAuthorizationType?: string
+  retryable?: boolean
 }
 
 /**
@@ -98,7 +124,16 @@ export async function settle(args: {
   if (body.success === true) return { ok: true }
   return {
     ok: false,
+    // The facilitator's own reason, never a locally minted one: it is what the
+    // merchant's 402 re-emits, so a substitute would teach buyer tooling a
+    // vocabulary this rail does not use.
     reason: body.errorReason ?? 'unknown',
     message: body.errorMessage ?? 'facilitator refused the payment',
+    // Passed through, absent on the rejections that do not carry them. The
+    // facilitator attaches the typehash hint to exactly one failure and would be
+    // misleading on the others, so it is never synthesised here.
+    retryable: body.retryable,
+    requiredAuthorizationType: body.requiredAuthorizationType,
+    setup_url: body.setup_url,
   }
 }

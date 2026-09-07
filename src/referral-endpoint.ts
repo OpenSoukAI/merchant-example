@@ -52,7 +52,22 @@ export function referralApp(
       fetchImpl: deps.fetchImpl,
     })
     if (!result.ok) {
-      return c.json({ success: false, errorReason: result.reason, errorMessage: result.message }, 402)
+      return c.json(
+        {
+          success: false,
+          errorReason: result.reason,
+          errorMessage: result.message,
+          // Forwarded, not swallowed: a wrong-typehash rejection is one
+          // re-signature away with nothing spent on-chain, and dropping
+          // `retryable` turns that one-retry loop into a stuck integration. The
+          // undefined ones do not survive JSON, so an ordinary rejection's body
+          // is unchanged.
+          retryable: result.retryable,
+          requiredAuthorizationType: result.requiredAuthorizationType,
+          setup_url: result.setup_url,
+        },
+        402,
+      )
     }
 
     // Settled. Serve whatever the paid route serves — unchanged from the direct

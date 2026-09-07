@@ -22,7 +22,12 @@ type PaymentRequiredBody = {
   accepts: [{ payTo: string }]
   extensions?: { attributionToken?: string; buyerAgentId?: string }
 }
-type SettleErrorBody = { errorReason: string }
+type SettleErrorBody = {
+  errorReason: string
+  retryable?: boolean
+  requiredAuthorizationType?: string
+  setup_url?: string
+}
 
 describe('the referral endpoint', () => {
   it('answers 402 on POST, which is what buyer tooling sends', async () => {
@@ -75,6 +80,35 @@ describe('the referral endpoint', () => {
     })
     expect(res.status).toBe(402)
     expect(((await res.json()) as SettleErrorBody).errorReason).toBe('invalid_payment')
+  })
+
+  it('forwards a retryable rejection to the buyer, hint and all', async () => {
+    // The failure a new integration hits first: the buyer signed the x402 default.
+    // The 402 must carry the facilitator's own machine-readable retry, or buyer
+    // tooling has nothing to act on but prose.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errorReason: 'invalid_payment',
+          errorMessage: 'authorization signature recovers under TransferWithAuthorization…',
+          requiredAuthorizationType: 'ReceiveWithAuthorization',
+          retryable: true,
+          setup_url: 'http://f/.well-known/referrer-agent',
+        }),
+        { status: 200 },
+      ),
+    )
+    const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
+    const res = await app(fetchImpl as never).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(402)
+    const body = (await res.json()) as SettleErrorBody
+    expect(body.retryable).toBe(true)
+    expect(body.requiredAuthorizationType).toBe('ReceiveWithAuthorization')
+    expect(body.setup_url).toBe('http://f/.well-known/referrer-agent')
   })
 
   it('ignores X-PAYMENT, the v1 header', async () => {

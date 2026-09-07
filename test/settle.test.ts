@@ -3,6 +3,13 @@ import { decodePaymentHeader, PAYMENT_HEADER, settle } from '../src/settle.ts'
 
 const requirements = { scheme: 'exact' } as never
 
+// The facilitator's ErrWrongAuthorizationType text, verbatim.
+const WRONG_TYPE_MESSAGE =
+  'authorization signature recovers under TransferWithAuthorization; this router requires ' +
+  'ReceiveWithAuthorization (to must equal msg.sender). Re-sign the same authorization with ' +
+  'the ReceiveWithAuthorization typehash'
+const SETUP_URL = 'http://127.0.0.1:8082/.well-known/referrer-agent'
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -69,6 +76,66 @@ describe('settle', () => {
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({ ok: false, reason: 'invalid_payment', message: 'bad token' })
+  })
+
+  it('surfaces the retryable wrong-typehash rejection as a field, not as prose', async () => {
+    // The facilitator attaches these to exactly one rejection: the signature is
+    // valid but over TransferWithAuthorization. Nothing went on-chain and the
+    // nonce is unused, so the same authorization re-signed under the named type
+    // settles — a merchant that drops `retryable` turns one retry into a dead end.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: false,
+        errorReason: 'invalid_payment',
+        errorMessage: WRONG_TYPE_MESSAGE,
+        requiredAuthorizationType: 'ReceiveWithAuthorization',
+        retryable: true,
+        setup_url: SETUP_URL,
+      }),
+    )
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid_payment',
+      message: WRONG_TYPE_MESSAGE,
+      requiredAuthorizationType: 'ReceiveWithAuthorization',
+      retryable: true,
+      setup_url: SETUP_URL,
+    })
+  })
+
+  it('never invents the typehash hint on a rejection that did not carry it', async () => {
+    // The facilitator guards this too: the hint on an unrelated failure is
+    // actively misleading, while setup_url rides along on every rejection.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: false,
+        errorReason: 'invalid_payment',
+        errorMessage: 'missing extensions.attributionToken',
+        setup_url: SETUP_URL,
+      }),
+    )
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid_payment',
+      message: 'missing extensions.attributionToken',
+      setup_url: SETUP_URL,
+    })
+    expect(result).toMatchObject({ ok: false })
+    if (result.ok) throw new Error('expected a rejection')
+    expect(result.retryable).toBeUndefined()
+    expect(result.requiredAuthorizationType).toBeUndefined()
   })
 
   it("hands the facilitator's own explanation back on a 400 envelope error", async () => {
