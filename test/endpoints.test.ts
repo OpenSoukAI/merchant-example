@@ -163,3 +163,37 @@ describe('the direct endpoint', () => {
     expect(body.extensions).toBeUndefined()
   })
 })
+
+describe('when the chain is unreachable', () => {
+  // The referral route resolves the split router over RPC on every request, so
+  // an unreachable chain is the first failure anyone running this locally meets.
+  // Unguarded it was Hono's bare `500 Internal Server Error`, with no body to
+  // read and the cause only in the server log.
+  const broken = () =>
+    createServer(cfg, {
+      resolveSplitRouter: async () => {
+        throw new Error(`HTTP request failed: ${cfg.rpcUrl}`)
+      },
+    })
+
+  it('answers 503, not 500 — nothing was attempted, so retrying is safe', async () => {
+    const res = await broken().request('/buy/referral', { method: 'GET' })
+    expect(res.status).toBe(503)
+    expect((await res.json()) as { errorReason: string }).toMatchObject({
+      success: false,
+      errorReason: 'split_router_unresolved',
+    })
+  })
+
+  it('does not put the RPC URL in the buyer’s response', async () => {
+    // viem's error names the endpoint it dialled. That belongs in the operator's
+    // log, not in a body served to whoever called the paid route.
+    const res = await broken().request('/buy/referral', { method: 'GET' })
+    expect(JSON.stringify(await res.json())).not.toContain(cfg.rpcUrl)
+  })
+
+  it('leaves the direct route working, since it never touches the chain', async () => {
+    const res = await broken().request('/buy', { method: 'POST' })
+    expect(res.status).toBe(402)
+  })
+})

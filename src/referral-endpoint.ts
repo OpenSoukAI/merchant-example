@@ -27,7 +27,28 @@ export function referralApp(
   // Both methods: buyer tooling POSTs the probe and the retry; the readiness
   // probe GETs. An endpoint registered on POST alone reports as not ready.
   app.on(['GET', 'POST'], '/', async (c) => {
-    const payTo = await resolveSplitRouter()
+    // Resolving the router is an RPC call, so it fails whenever the chain is
+    // unreachable — the first thing anyone running this locally hits, and left
+    // unguarded it surfaces as Hono's bare `500 Internal Server Error` with no
+    // body. 503 is the honest status: nothing has been attempted, no payment
+    // exists, and retrying later is safe. The viem error is logged rather than
+    // returned, because it carries the RPC URL.
+    let payTo: Address
+    try {
+      payTo = await resolveSplitRouter()
+    } catch (err) {
+      console.error('cannot resolve the split router from the address registry:', err)
+      return c.json(
+        {
+          success: false,
+          errorReason: 'split_router_unresolved',
+          errorMessage:
+            'cannot reach the address registry to resolve the split router — check MERCHANT_RPC_URL and MERCHANT_ADDRESS_REGISTRY',
+        },
+        503,
+      )
+    }
+
     const requirements = buildRequirements(cfg, payTo)
     const raw = c.req.header(PAYMENT_HEADER)
 
