@@ -9,9 +9,10 @@ the integration end to end. This repo is the executable version of it.
 
 Two different floors, for two different reasons:
 
-- **Runtime — Node 20+.** The example itself (hono, viem, `node:http`) has no dependency on
+- **Runtime — Node 20+.** The example itself (hono, `@hono/node-server`, viem) has no dependency on
   anything newer. Serve it on Node 20 with `npx tsx src/server.ts`, or compile `src/` with `tsc`
-  first.
+  first — either way you load the environment yourself, since `npm start` reads `.env` through
+  Node's own `--env-file-if-exists`, which arrived in 22.9.
 - **Repo tooling — Node 24+.** `npm test` and `npm run typecheck` need it: vitest 5 supports
   `^22.12 || ^24 || >=26`, and Node's unflagged TypeScript stripping (which is what lets `npm
   start` run `src/server.ts` directly, with no build step) only starts at 23.6. 24 is the lowest
@@ -37,8 +38,10 @@ Two routes. `/buy` is the merchant's ordinary paid route, and this repo never mo
 `payTo` is the merchant's own wallet and it carries no attribution fields.
 
 `/buy/referral` is the copy: same product, same price, same auth, differing only in `payTo`, the
-facilitator, and the echoed `extensions`. **The diff between `src/direct-endpoint.ts` and
-`src/referral-endpoint.ts` is the whole integration.**
+facilitator, and the echoed `extensions`. **Those three fields are the whole integration.** The
+rest of what `src/referral-endpoint.ts` adds over `src/direct-endpoint.ts` is the ordinary x402
+retry handshake — decode `PAYMENT-SIGNATURE`, settle, then serve — which `direct-endpoint.ts`
+omits and a merchant already selling over x402 already has.
 
 You register `/buy/referral` as the product's `endpoint_url`, so it is where ref links send buyers.
 

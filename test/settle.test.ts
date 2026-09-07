@@ -71,14 +71,94 @@ describe('settle', () => {
     expect(result).toEqual({ ok: false, reason: 'invalid_payment', message: 'bad token' })
   })
 
-  it('treats a 400 envelope error as a failure too', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ error: 'bad envelope' }, 400))
+  it("hands the facilitator's own explanation back on a 400 envelope error", async () => {
+    // The real 400 shape. Both of the facilitator's 400 branches — a body it cannot
+    // bind, and a wrong x402Version — answer with exactly these three fields, and
+    // this is the one sentence that says what the envelope got wrong.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          success: false,
+          errorReason: 'invalid_request',
+          errorMessage: 'unsupported x402Version 0 (want 2)',
+        },
+        400,
+      ),
+    )
     const result = await settle({
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
       fetchImpl: fetchImpl as never,
     })
-    expect(result).toMatchObject({ ok: false, reason: 'invalid_request' })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid_request',
+      message: 'unsupported x402Version 0 (want 2)',
+    })
+  })
+
+  it('names the status when a 400 body carries no explanation at all', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, 400))
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid_request',
+      message: 'facilitator answered 400',
+    })
+  })
+
+  it('reports an unreadable 2xx as malformed, not as a refusal', async () => {
+    // A proxy's HTML error page under a 200. "I could not read the answer" must not
+    // become "the payment was refused", and must not become "sale completed" either.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response('<html>gateway</html>', { status: 200 }))
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'malformed_response',
+      message: 'facilitator answered 200 with a body that is not JSON',
+    })
+  })
+
+  it('bounds the call, rather than inheriting undici\'s 300 s default', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ success: true }))
+    await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    const [, init] = fetchImpl.mock.calls[0]!
+    expect((init as { signal?: AbortSignal }).signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('gives a timeout its own reason, because a timeout is not a rejection', async () => {
+    // What AbortSignal.timeout rejects the fetch with.
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(new DOMException('This operation was aborted', 'TimeoutError'))
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'facilitator_timeout',
+      message: 'facilitator did not answer within 60s',
+    })
   })
 })

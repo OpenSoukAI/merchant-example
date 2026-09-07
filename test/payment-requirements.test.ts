@@ -26,12 +26,34 @@ describe('buildRequirements', () => {
   })
 
   it('names ReceiveWithAuthorization, not the x402 default', () => {
+    // The literal on both lines. Asserting the emitted field against the constant
+    // compares the code to itself and holds for any value the constant takes.
     expect(AUTHORIZATION_TYPE).toBe('ReceiveWithAuthorization')
-    expect(buildRequirements(cfg, ROUTER).extra.authorizationType).toBe(AUTHORIZATION_TYPE)
+    expect(buildRequirements(cfg, ROUTER).extra.authorizationType).toBe('ReceiveWithAuthorization')
   })
 
   it('passes the price through as a string of base units', () => {
     expect(buildRequirements(cfg, ROUTER).amount).toBe('1000000')
+  })
+
+  it('advertises the only scheme this rail settles', () => {
+    expect(buildRequirements(cfg, ROUTER).scheme).toBe('exact')
+  })
+
+  it('names the configured token and chain, not a hardcoded pair', () => {
+    // `asset` is the contract the hardcoded EIP-712 domain above describes: name the
+    // wrong one and every signature recovery fails against a different token.
+    const requirements = buildRequirements(cfg, ROUTER)
+    expect(requirements.asset).toBe('0x2222222222222222222222222222222222222222')
+    expect(requirements.network).toBe('eip155:8453')
+  })
+
+  it("leaves 60 seconds for the buyer's signing window", () => {
+    expect(buildRequirements(cfg, ROUTER).maxTimeoutSeconds).toBe(60)
+  })
+
+  it('carries the facilitator URL a tool-less buyer settles through', () => {
+    expect(buildRequirements(cfg, ROUTER).extra.facilitatorUrl).toBe('http://127.0.0.1:8082')
   })
 })
 
@@ -52,6 +74,11 @@ describe('build402', () => {
     expect(body.extensions.setup_url).toBe(
       'http://127.0.0.1:8082/.well-known/referrer-agent',
     )
+  })
+
+  it('names the referral route as the resource, which is the registered endpoint_url', () => {
+    const body = build402({ cfg, payTo: ROUTER, attributionToken: '', buyerAgentId: null })
+    expect(body.resource.url).toBe('https://api.example.com/buy/referral')
   })
 
   it('is x402 version 2', () => {

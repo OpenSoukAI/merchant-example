@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { loadConfig, MissingConfigError } from '../src/config.ts'
 
@@ -67,5 +68,18 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...complete, MERCHANT_PRICE_BASE_UNITS: '1.5' })).toThrow(
       /base units/,
     )
+  })
+})
+
+describe('the start script', () => {
+  // loadConfig reads process.env and nothing else, so the `.env` the README tells
+  // you to create is read only if the start script hands it to Node. Without the
+  // flag, `cp .env.example .env && npm start` exits 1 naming all eight variables
+  // the merchant just filled in. Node's own loader, so no dotenv dependency.
+  it('hands .env to Node, which is the only thing that reads it', () => {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { scripts: { start: string } }
+    expect(pkg.scripts.start).toMatch(/--env-file(-if-exists)?=\.env\b/)
   })
 })

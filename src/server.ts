@@ -20,7 +20,8 @@ export function createServer(
     })
 
   const app = new Hono()
-  // Order matters: the more specific route is mounted first.
+  // Mount order is free here: `directApp` registers only '/', so at /buy it matches
+  // /buy and nothing under it, and cannot shadow the referral route.
   app.route('/buy/referral', referralApp(cfg, resolveSplitRouter, { fetchImpl: deps.fetchImpl }))
   app.route('/buy', directApp(cfg))
   return app
