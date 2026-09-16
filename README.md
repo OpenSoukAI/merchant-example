@@ -38,10 +38,15 @@ Two routes. `/buy` is the merchant's ordinary paid route, and this repo never mo
 `payTo` is the merchant's own wallet and it carries no attribution fields.
 
 `/buy/referral` is the copy: same product, same price, same auth, differing only in `payTo`, the
-facilitator, and the echoed `extensions`. **Those three fields are the whole integration.** The
-rest of what `src/referral-endpoint.ts` adds over `src/direct-endpoint.ts` is the ordinary x402
-retry handshake — decode `PAYMENT-SIGNATURE`, settle, then serve — which `direct-endpoint.ts`
-omits and a merchant already selling over x402 already has.
+facilitator, the echoed `extensions`, and `extra.productId`. **Those four fields are the whole
+integration.** The rest of what `src/referral-endpoint.ts` adds over `src/direct-endpoint.ts` is
+the ordinary x402 retry handshake — decode `PAYMENT-SIGNATURE`, settle, then serve — which
+`direct-endpoint.ts` omits and a merchant already selling over x402 already has.
+
+`extra.productId` is the bytes32 id you gave the product at `add_product`. A buyer may pay this
+endpoint with a ref link minted for **any** of your products; the facilitator never sees your URL,
+so this field is how it learns which product was sold and which commission rate applies. Leave it
+out and such a sale is recorded as the link's product.
 
 You register `/buy/referral` as the product's `endpoint_url`, so it is where ref links send buyers.
 

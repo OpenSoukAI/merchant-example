@@ -8,6 +8,7 @@ const cfg = loadConfig({
   MERCHANT_USDC: '0x2222222222222222222222222222222222222222',
   MERCHANT_NETWORK: 'eip155:8453',
   MERCHANT_PRICE_BASE_UNITS: '1000000',
+  MERCHANT_PRODUCT_ID: '0x00000000000000000000000000000000000000000000000000000000000000aa',
   MERCHANT_FACILITATOR_URL: 'http://f',
   MERCHANT_API_URL: 'http://api',
   MERCHANT_PUBLIC_URL: 'https://api.example.com',
@@ -20,7 +21,7 @@ const app = (fetchImpl?: typeof fetch) =>
 // Narrow shapes for `res.json()`, which types as `unknown` here (no DOM lib —
 // see ruling R14) — just enough of each body for the assertions that read it.
 type PaymentRequiredBody = {
-  accepts: [{ payTo: string }]
+  accepts: [{ payTo: string; extra?: { productId?: string } }]
   extensions?: { attributionToken?: string; buyerAgentId?: string }
 }
 type SettleErrorBody = {
@@ -54,6 +55,16 @@ describe('the referral endpoint', () => {
     const body = (await res.json()) as PaymentRequiredBody
     expect(body.extensions?.attributionToken).toBe('eyJ2Ijo0')
     expect(body.extensions?.buyerAgentId).toBe('7')
+  })
+
+  it('names the product it sells in the 402, whatever ref link the buyer presented', async () => {
+    // A ref link for a sibling product arrives here; the facilitator settles on THIS id.
+    const res = await app().request('/buy/referral', {
+      method: 'POST',
+      headers: { 'X-Referrer-Token': 'eyJ2Ijo0' },
+    })
+    const body = (await res.json()) as PaymentRequiredBody
+    expect(body.accepts[0].extra?.productId).toBe(cfg.productId)
   })
 
   it('returns the settle transaction hash, which buyer tooling requires', async () => {
@@ -185,6 +196,7 @@ describe('the direct endpoint', () => {
     const body = (await res.json()) as PaymentRequiredBody
     expect(body.accepts[0].payTo).toBe(cfg.directPayTo)
     expect(body.extensions).toBeUndefined()
+    expect(body.accepts[0].extra?.productId).toBeUndefined()
   })
 })
 
