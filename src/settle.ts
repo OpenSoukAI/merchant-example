@@ -1,4 +1,5 @@
 import type { PaymentRequirements } from './payment-requirements.ts'
+import type { SettlementSigner } from './settlement-auth.ts'
 
 /**
  * x402 v2. `X-PAYMENT` is the v1 header, and the onboarding manifest's prose
@@ -103,19 +104,32 @@ export async function settle(args: {
   facilitatorUrl: string
   paymentPayload: unknown
   paymentRequirements: PaymentRequirements
+  /**
+   * Signs the request as the seller (REF-324). Only the seller may create a purchase record:
+   * without this, anyone holding a public ref link can post their own settlement and mint an
+   * on-chain purchase — the highest review trust tier — having bought nothing.
+   */
+  signer: SettlementSigner
   fetchImpl?: typeof fetch
 }): Promise<SettleResult> {
   const doFetch = args.fetchImpl ?? fetch
+
+  // Serialised ONCE, then both signed and sent. Calling JSON.stringify again for the request
+  // would sign one string and send another: the facilitator hashes the bytes it received, so
+  // any re-serialisation that reorders a key turns a valid signature into a 401.
+  const requestBody = JSON.stringify({
+    x402Version: 2,
+    paymentPayload: args.paymentPayload,
+    paymentRequirements: args.paymentRequirements,
+  })
+  const authHeaders = await args.signer.sign(requestBody)
+
   let res: Response
   try {
     res = await doFetch(`${args.facilitatorUrl}/settle`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        x402Version: 2,
-        paymentPayload: args.paymentPayload,
-        paymentRequirements: args.paymentRequirements,
-      }),
+      headers: { 'content-type': 'application/json', ...authHeaders },
+      body: requestBody,
       signal: AbortSignal.timeout(SETTLE_TIMEOUT_MS),
     })
   } catch (err) {

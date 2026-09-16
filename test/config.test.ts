@@ -14,6 +14,7 @@ const complete = {
   MERCHANT_PUBLIC_URL: 'http://127.0.0.1:8083',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
   MERCHANT_PRODUCT_ID: '0x00000000000000000000000000000000000000000000000000000000000000aa',
+  MERCHANT_SIGNER_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
 }
 
 describe('loadConfig', () => {
@@ -35,6 +36,28 @@ describe('loadConfig', () => {
     expect(loadConfig({ ...complete, MERCHANT_PRODUCT_ID: '0X00000000000000000000000000000000000000000000000000000000000000AA' }).productId).toBe(
       '0x00000000000000000000000000000000000000000000000000000000000000aa',
     )
+  })
+
+  // REF-324. Required, not optional: a reference merchant that can start without a signing
+  // key teaches an integrator to ship one, and the facilitator then refuses every sale.
+  it('rejects a signer key that is not 32 bytes of 0x-prefixed hex', () => {
+    for (const bad of ['0xaa', '0x' + 'zz'.repeat(32), 'ac'.repeat(32), '0x' + 'aa'.repeat(33)]) {
+      expect(() => loadConfig({ ...complete, MERCHANT_SIGNER_PRIVATE_KEY: bad })).toThrow(
+        /MERCHANT_SIGNER_PRIVATE_KEY/,
+      )
+    }
+  })
+
+  it('never echoes the signer key in the error, since config errors get pasted around', () => {
+    const leaky = '0x' + 'ab'.repeat(31) // wrong length, still secret-shaped
+    let message = ''
+    try {
+      loadConfig({ ...complete, MERCHANT_SIGNER_PRIVATE_KEY: leaky })
+    } catch (err) {
+      message = (err as Error).message
+    }
+    expect(message).toMatch(/MERCHANT_SIGNER_PRIVATE_KEY/)
+    expect(message).not.toContain('ab'.repeat(31))
   })
 
   it('rejects a product id that is not 32 bytes of hex', () => {
@@ -64,6 +87,7 @@ describe('loadConfig', () => {
         'MERCHANT_PRODUCT_ID',
         'MERCHANT_PUBLIC_URL',
         'MERCHANT_RPC_URL',
+        'MERCHANT_SIGNER_PRIVATE_KEY',
         'MERCHANT_USDC',
       ])
     }

@@ -1,4 +1,5 @@
 export type Address = `0x${string}`
+export type Hex = `0x${string}`
 
 export type Config = {
   port: number
@@ -20,6 +21,15 @@ export type Config = {
    * when a buyer pays with a ref link minted for a sibling product (REF-315).
    */
   productId: Address
+  /**
+   * The key this server signs `/settle` with, so the facilitator can tell the seller asked
+   * for the settlement rather than a buyer holding a public ref link (REF-324).
+   *
+   * A dedicated hot key granted `SETTLEMENT_SIGNER_ROLE`, NOT the merchant's owner key. The
+   * grant must land BEFORE this server starts signing: an unrecognised signature is refused
+   * whatever the facilitator's rollout flag says, so the order is grant first, then deploy.
+   */
+  signerPrivateKey: Hex
   facilitatorUrl: string
   /**
    * The protocol API's base URL — NOT the facilitator's. The onboarding manifest
@@ -57,6 +67,7 @@ const REQUIRED = [
   'MERCHANT_NETWORK',
   'MERCHANT_PRICE_BASE_UNITS',
   'MERCHANT_PRODUCT_ID',
+  'MERCHANT_SIGNER_PRIVATE_KEY',
   'MERCHANT_FACILITATOR_URL',
   'MERCHANT_API_URL',
   'MERCHANT_PUBLIC_URL',
@@ -82,6 +93,16 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     )
   }
 
+  const signerKey = env.MERCHANT_SIGNER_PRIVATE_KEY as string
+  if (!/^0x[0-9a-fA-F]{64}$/.test(signerKey)) {
+    // The value is never echoed back: a wrong key is still a key, and config errors get
+    // pasted into issues and chat. The variable name is enough to act on.
+    throw new Error(
+      'MERCHANT_SIGNER_PRIVATE_KEY must be a 0x-prefixed 32-byte hex private key — the hot ' +
+        'key you granted SETTLEMENT_SIGNER_ROLE, not the merchant owner key',
+    )
+  }
+
   return {
     port: Number(env.MERCHANT_PORT ?? '8083'),
     rpcUrl: env.MERCHANT_RPC_URL as string,
@@ -90,6 +111,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     network: env.MERCHANT_NETWORK as string,
     priceBaseUnits: price,
     productId: `0x${productHex.toLowerCase()}`,
+    signerPrivateKey: signerKey as Hex,
     facilitatorUrl: (env.MERCHANT_FACILITATOR_URL as string).replace(/\/$/, ''),
     apiUrl: (env.MERCHANT_API_URL as string).replace(/\/$/, ''),
     publicUrl: (env.MERCHANT_PUBLIC_URL as string).replace(/\/$/, ''),
