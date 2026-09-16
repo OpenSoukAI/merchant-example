@@ -4,10 +4,10 @@ import type { Config } from './config.ts'
 /**
  * The merchant's ordinary paid route, exactly as it was before OpenSouk: paid on
  * the merchant's own wallet, with no attribution extensions and no protocol
- * facilitator. It is in this repo to be READ, not modified — the three fields
- * that differ in referral-endpoint.ts (payTo, the facilitator, extensions) are
- * the whole integration. It answers 402 and stops: the x402 retry handshake that
- * file also carries is not part of that difference.
+ * facilitator. It is in this repo to be READ, not modified — the four fields
+ * that differ in referral-endpoint.ts (payTo, the facilitator, extensions, and
+ * extra.productId) are the whole integration. It answers 402 and stops: the x402
+ * retry handshake that file also carries is not part of that difference.
  */
 export function directApp(cfg: Config): Hono {
   const app = new Hono()

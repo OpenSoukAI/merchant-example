@@ -12,12 +12,22 @@ const cfg = loadConfig({
   MERCHANT_API_URL: 'http://127.0.0.1:8080',
   MERCHANT_PUBLIC_URL: 'https://api.example.com',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
+  MERCHANT_PRODUCT_ID: '0x00000000000000000000000000000000000000000000000000000000000000aa',
 })
 const ROUTER = '0x4444444444444444444444444444444444444444' as const
 
 describe('buildRequirements', () => {
   it('names the split router as the payment target', () => {
     expect(buildRequirements(cfg, ROUTER).payTo).toBe(ROUTER)
+  })
+
+  // The fourth integration field (REF-315). The facilitator never sees this endpoint's URL, so
+  // this is how it learns which product was sold when a buyer presents a ref link minted for a
+  // sibling product of the same merchant. Without it, that sale settles as the link's product.
+  it('names the product this endpoint sells, so any of the merchant’s ref links can be paid here', () => {
+    expect(buildRequirements(cfg, ROUTER).extra.productId).toBe(
+      '0x00000000000000000000000000000000000000000000000000000000000000aa',
+    )
   })
 
   it("carries USDC's EIP-712 domain, without which the facilitator cannot recover the signature", () => {

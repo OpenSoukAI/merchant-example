@@ -21,6 +21,12 @@ export type PaymentRequirements = {
     authorizationType: string
     /** Non-standard, and how a tool-less buyer finds the facilitator to settle through. */
     facilitatorUrl: string
+    /**
+     * Non-standard. The product this endpoint sells. A buyer may pay here with a ref link
+     * minted for ANY product of this merchant; the facilitator settles on this id, at this
+     * product's commission rate. Omit it and such a sale is recorded as the link's product.
+     */
+    productId: Address
   }
 }
 
@@ -48,6 +54,7 @@ export function buildRequirements(cfg: Config, payTo: Address): PaymentRequireme
       version: '2',
       authorizationType: AUTHORIZATION_TYPE,
       facilitatorUrl: cfg.facilitatorUrl,
+      productId: cfg.productId,
     },
   }
 }

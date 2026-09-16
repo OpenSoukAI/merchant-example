@@ -14,6 +14,12 @@ export type Config = {
   network: string
   /** USDC base units, 6 decimals. A string because a uint256 does not survive a JSON number. */
   priceBaseUnits: string
+  /**
+   * The bytes32 id this merchant chose for the product at add_product, lowercase 0x-hex.
+   * Emitted as `extra.productId` so the facilitator knows which product this endpoint sold
+   * when a buyer pays with a ref link minted for a sibling product (REF-315).
+   */
+  productId: Address
   facilitatorUrl: string
   /**
    * The protocol API's base URL — NOT the facilitator's. The onboarding manifest
@@ -50,6 +56,7 @@ const REQUIRED = [
   'MERCHANT_USDC',
   'MERCHANT_NETWORK',
   'MERCHANT_PRICE_BASE_UNITS',
+  'MERCHANT_PRODUCT_ID',
   'MERCHANT_FACILITATOR_URL',
   'MERCHANT_API_URL',
   'MERCHANT_PUBLIC_URL',
@@ -67,6 +74,14 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     )
   }
 
+  const rawProductId = env.MERCHANT_PRODUCT_ID as string
+  const productHex = rawProductId.replace(/^0[xX]/, '')
+  if (!/^[0-9a-fA-F]{64}$/.test(productHex)) {
+    throw new Error(
+      `MERCHANT_PRODUCT_ID must be the 32-byte hex product id you registered with add_product, got ${rawProductId}`,
+    )
+  }
+
   return {
     port: Number(env.MERCHANT_PORT ?? '8083'),
     rpcUrl: env.MERCHANT_RPC_URL as string,
@@ -74,6 +89,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     usdc: env.MERCHANT_USDC as Address,
     network: env.MERCHANT_NETWORK as string,
     priceBaseUnits: price,
+    productId: `0x${productHex.toLowerCase()}`,
     facilitatorUrl: (env.MERCHANT_FACILITATOR_URL as string).replace(/\/$/, ''),
     apiUrl: (env.MERCHANT_API_URL as string).replace(/\/$/, ''),
     publicUrl: (env.MERCHANT_PUBLIC_URL as string).replace(/\/$/, ''),
