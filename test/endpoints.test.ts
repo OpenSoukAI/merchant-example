@@ -13,6 +13,7 @@ const cfg = loadConfig({
   MERCHANT_API_URL: 'http://api',
   MERCHANT_PUBLIC_URL: 'https://api.example.com',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
+  MERCHANT_SIGNER_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
 })
 const ROUTER = '0x4444444444444444444444444444444444444444'
 const app = (fetchImpl?: typeof fetch) =>

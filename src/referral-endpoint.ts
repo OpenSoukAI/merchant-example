@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Address, Config } from './config.ts'
+import { createSettlementSigner, type SettlementSigner } from './settlement-auth.ts'
 import { build402, buildRequirements } from './payment-requirements.ts'
 import {
   decodePaymentHeader,
@@ -20,8 +21,11 @@ import {
 export function referralApp(
   cfg: Config,
   resolveSplitRouter: () => Promise<Address>,
-  deps: { fetchImpl?: typeof fetch } = {},
+  deps: { fetchImpl?: typeof fetch; signer?: SettlementSigner } = {},
 ): Hono {
+  // Built once at startup, not per request: a malformed key then fails the process instead of
+  // every buyer, and the address is available to log for the SETTLEMENT_SIGNER_ROLE check.
+  const signer = deps.signer ?? createSettlementSigner(cfg.signerPrivateKey)
   const app = new Hono()
 
   // Both methods: buyer tooling POSTs the probe and the retry; the readiness
@@ -75,6 +79,7 @@ export function referralApp(
       facilitatorUrl: cfg.facilitatorUrl,
       paymentPayload,
       paymentRequirements: requirements,
+      signer,
       fetchImpl: deps.fetchImpl,
     })
     if (!result.ok) {

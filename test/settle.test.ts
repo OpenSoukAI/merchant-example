@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
+import { recoverMessageAddress } from 'viem'
 import { decodePaymentHeader, PAYMENT_HEADER, settle } from '../src/settle.ts'
+import {
+  createSettlementSigner,
+  settlementPayloadHash,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+} from '../src/settlement-auth.ts'
+
+// Anvil account #0, a publicly known test key. See test/settlement-auth.test.ts for the
+// cross-language vector that pins the bytes against the facilitator's Go implementation.
+const SIGNER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+const SIGNER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+const testSigner = createSettlementSigner(SIGNER_KEY)
 
 const requirements = { scheme: 'exact' } as never
 
@@ -42,6 +55,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: { a: 1 },
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     const [url, init] = fetchImpl.mock.calls[0]!
@@ -53,12 +67,81 @@ describe('settle', () => {
     })
   })
 
+  // REF-324: the facilitator recovers the signer from the bytes it received, so a signature
+  // that does not match the posted body is a 401 on every sale.
+  it('signs the exact bytes it posts, so the facilitator recovers the seller', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ success: true }))
+    await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: { a: 1 },
+      paymentRequirements: requirements,
+      signer: testSigner,
+      fetchImpl: fetchImpl as never,
+    })
+    const [, init] = fetchImpl.mock.calls[0]!
+    const sent = (init as Record<string, unknown>).body as string
+    const headers = (init as Record<string, Record<string, string>>).headers!
+
+    const recovered = await recoverMessageAddress({
+      message: { raw: settlementPayloadHash(sent, Number(headers[TIMESTAMP_HEADER])) },
+      signature: headers[SIGNATURE_HEADER] as `0x${string}`,
+    })
+    expect(recovered).toBe(SIGNER_ADDRESS)
+  })
+
+  // Serialising twice normally yields identical bytes, so a re-serialising implementation
+  // passes every test above — V8 orders a given object's keys the same way each time. What
+  // it cannot survive is the value moving between the two calls, which is the whole reason
+  // to serialise once. The getter makes that concrete: `nonce` reads 1, then 2.
+  it('serialises the body once, so a value that moves cannot desync signature from bytes', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ success: true }))
+    let reads = 0
+    const drifting = {
+      get nonce() {
+        reads += 1
+        return reads
+      },
+    }
+    await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: drifting,
+      paymentRequirements: requirements,
+      signer: testSigner,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(reads).toBe(1)
+
+    const [, init] = fetchImpl.mock.calls[0]!
+    const sent = (init as Record<string, unknown>).body as string
+    const headers = (init as Record<string, Record<string, string>>).headers!
+    const recovered = await recoverMessageAddress({
+      message: { raw: settlementPayloadHash(sent, Number(headers[TIMESTAMP_HEADER])) },
+      signature: headers[SIGNATURE_HEADER] as `0x${string}`,
+    })
+    expect(recovered).toBe(SIGNER_ADDRESS)
+  })
+
+  it('keeps the JSON content type alongside the auth headers', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ success: true }))
+    await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: { a: 1 },
+      paymentRequirements: requirements,
+      signer: testSigner,
+      fetchImpl: fetchImpl as never,
+    })
+    const [, init] = fetchImpl.mock.calls[0]!
+    const headers = (init as Record<string, Record<string, string>>).headers!
+    expect(headers['content-type']).toBe('application/json')
+  })
+
   it('treats success: true as settled', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ success: true }))
     const result = await settle({
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({ ok: true })
@@ -73,6 +156,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({ ok: false, reason: 'invalid_payment', message: 'bad token' })
@@ -97,6 +181,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({
@@ -124,6 +209,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({
@@ -156,6 +242,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({
@@ -176,6 +263,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({
@@ -191,6 +279,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({
@@ -210,6 +299,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({
@@ -225,6 +315,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     const [, init] = fetchImpl.mock.calls[0]!
@@ -240,6 +331,7 @@ describe('settle', () => {
       facilitatorUrl: 'http://f',
       paymentPayload: {},
       paymentRequirements: requirements,
+      signer: testSigner,
       fetchImpl: fetchImpl as never,
     })
     expect(result).toEqual({

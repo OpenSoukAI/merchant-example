@@ -19,7 +19,7 @@ Two different floors, for two different reasons:
   version where both work. This is a constraint of this repo's tooling, not of the OpenSouk
   protocol.
 
-## The four things merchants get wrong
+## The five things merchants get wrong
 
 1. **Answer both `POST` and `GET`.** Buyer tooling POSTs; the readiness probe GETs. An endpoint
    registered on POST alone reports as not ready even though purchases against it succeed.
@@ -31,6 +31,10 @@ Two different floors, for two different reasons:
    status reads a refusal as a completed sale. → `src/settle.ts`
 4. **Read `PAYMENT-SIGNATURE`, not `X-PAYMENT`.** The latter is x402 v1, which the onboarding
    manifest's prose recipe still names. → `src/settle.ts`
+5. **Sign the settlement request.** Only the seller may create a purchase record. Unsigned, the
+   call is just an HTTP POST anyone can make: a buyer holding your public ref link can settle
+   their own cent-sized payment and mint an on-chain purchase — the protocol's highest review
+   trust tier — having bought nothing from you. → `src/settlement-auth.ts`
 
 ## The shape
 
@@ -38,8 +42,8 @@ Two routes. `/buy` is the merchant's ordinary paid route, and this repo never mo
 `payTo` is the merchant's own wallet and it carries no attribution fields.
 
 `/buy/referral` is the copy: same product, same price, same auth, differing only in `payTo`, the
-facilitator, the echoed `extensions`, and `extra.productId`. **Those four fields are the whole
-integration.** The rest of what `src/referral-endpoint.ts` adds over `src/direct-endpoint.ts` is
+facilitator, the echoed `extensions`, `extra.productId`, and the two headers that sign the
+settlement call. **Those five things are the whole integration.** The rest of what `src/referral-endpoint.ts` adds over `src/direct-endpoint.ts` is
 the ordinary x402 retry handshake — decode `PAYMENT-SIGNATURE`, settle, then serve — which
 `direct-endpoint.ts` omits and a merchant already selling over x402 already has.
 
@@ -50,6 +54,36 @@ out and such a sale is recorded as the link's product.
 
 You register `/buy/referral` as the product's `endpoint_url`, so it is where ref links send buyers.
 
+## The settlement signer
+
+The facilitator accepts `/verify` and `/settle` from the merchant **owner** or from any address
+holding `SETTLEMENT_SIGNER_ROLE` for that merchant. This server signs with
+`MERCHANT_SIGNER_PRIVATE_KEY`, over `keccak256(body || uint64_be(unix_seconds))`, EIP-191, in
+`X-Agent-Signature` and `X-Agent-Timestamp` — the same scheme the protocol API uses for agents.
+
+Use a dedicated hot key and grant it the role. The owner key controls your commission rates,
+your delisting, your payout wallet and the merchant identity itself; none of that is needed to
+sell something, and an always-on web server is the wrong place to keep it.
+
+**Order matters.** Grant the role first, then deploy the key:
+
+```bash
+# Role id: keccak256("SETTLEMENT_SIGNER_ROLE")
+cast send $MERCHANT_REGISTRY \
+  "grantRole(uint256,bytes32,address)" \
+  $MERCHANT_ID \
+  0x9afba5c05b1dfbaa7188068a6610fc1a9f4c5b291aea74d5d9d8bc81f8d004f1 \
+  $SIGNER_ADDRESS \
+  --private-key $MERCHANT_OWNER_KEY
+```
+
+A signature the facilitator cannot place is refused whatever its rollout setting says — the
+flag governs whether *unsigned* calls are still tolerated, never whether a wrong signature is.
+So deploying a key you have not granted takes your sales down immediately. The server prints
+the signer address at startup for exactly this check.
+
+Rotating is the same order in reverse: grant the new key, deploy it, then revoke the old one.
+
 ## Run it
 
 ```bash
@@ -59,7 +93,8 @@ npm start                # Node 24+; on Node 20 use: npx tsx src/server.ts
 ```
 
 Nothing is deployed on a public chain yet, so the values in `.env.example` are placeholders —
-zero addresses and a `eip155:0` network — not any particular chain's real values.
+zero addresses and a `eip155:0` network — not any particular chain's real values. The zero
+`MERCHANT_SIGNER_PRIVATE_KEY` is not a usable key either; generate one and grant it the role.
 
 ```bash
 # the probe path: a 402 naming the split router
