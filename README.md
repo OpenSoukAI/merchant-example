@@ -105,7 +105,7 @@ curl -s -X POST localhost:8083/buy/referral | jq '.accepts[0].payTo, .extensions
 "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 {
   "attributionToken": "",
-  "setup_url": "http://127.0.0.1:8080/.well-known/referrer-agent"
+  "setup_url": "http://127.0.0.1:8080/.well-known/opensouk"
 }
 ```
 
@@ -114,7 +114,7 @@ resolved, not configured, per point 2 above — and like every address in this r
 placeholder, not somewhere to send money.)
 
 `setup_url` is built from `MERCHANT_API_URL`, not from `MERCHANT_FACILITATOR_URL`: the two are
-different hosts, and only the API serves `/.well-known/referrer-agent`. Pointing it at the
+different hosts, and only the API serves `/.well-known/opensouk`. Pointing it at the
 facilitator answers 404 to the one reader the field exists for — a buyer that has just failed to
 pay and is looking for how to onboard.
 

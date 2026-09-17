@@ -33,7 +33,7 @@ export type Config = {
   facilitatorUrl: string
   /**
    * The protocol API's base URL — NOT the facilitator's. The onboarding manifest
-   * at `/.well-known/referrer-agent` is served by the API; the facilitator serves
+   * at `/.well-known/opensouk` is served by the API; the facilitator serves
    * `/verify`, `/settle`, `/supported` and nothing under `/.well-known`, so
    * deriving `setup_url` from `facilitatorUrl` yields a 404 for the one reader it
    * exists for — a cold agent that has just failed to pay.
