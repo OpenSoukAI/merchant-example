@@ -163,7 +163,7 @@ describe('the referral endpoint', () => {
           errorMessage: 'authorization signature recovers under TransferWithAuthorization…',
           requiredAuthorizationType: 'ReceiveWithAuthorization',
           retryable: true,
-          setup_url: 'http://f/.well-known/referrer-agent',
+          setup_url: 'http://f/.well-known/opensouk',
         }),
         { status: 200 },
       ),
@@ -177,7 +177,7 @@ describe('the referral endpoint', () => {
     const body = (await res.json()) as SettleErrorBody
     expect(body.retryable).toBe(true)
     expect(body.requiredAuthorizationType).toBe('ReceiveWithAuthorization')
-    expect(body.setup_url).toBe('http://f/.well-known/referrer-agent')
+    expect(body.setup_url).toBe('http://f/.well-known/opensouk')
   })
 
   it('ignores X-PAYMENT, the v1 header', async () => {

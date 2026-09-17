@@ -80,7 +80,7 @@ export function build402(args: {
       // purchase, and the facilitator substitutes its own sentinel for it.
       ...(buyerAgentId === null ? {} : { buyerAgentId }),
       // The API host, never the facilitator's: only the API serves this manifest.
-      setup_url: `${cfg.apiUrl}/.well-known/referrer-agent`,
+      setup_url: `${cfg.apiUrl}/.well-known/opensouk`,
     },
   }
 }

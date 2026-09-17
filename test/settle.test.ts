@@ -21,7 +21,7 @@ const WRONG_TYPE_MESSAGE =
   'authorization signature recovers under TransferWithAuthorization; this router requires ' +
   'ReceiveWithAuthorization (to must equal msg.sender). Re-sign the same authorization with ' +
   'the ReceiveWithAuthorization typehash'
-const SETUP_URL = 'http://127.0.0.1:8082/.well-known/referrer-agent'
+const SETUP_URL = 'http://127.0.0.1:8082/.well-known/opensouk'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
