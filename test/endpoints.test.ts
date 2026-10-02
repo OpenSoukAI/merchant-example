@@ -266,6 +266,24 @@ describe('the referral endpoint, settle_pending', () => {
     expect(res.status).toBe(504)
     expect(receiptStatus).not.toHaveBeenCalled()
   })
+
+  it('answers 409, not 402, when the authorization was already used — the buyer already paid', async () => {
+    const errorMessage =
+      'this payment authorization was already used or cancelled; this request moved no funds — deliver only if you hold a successful settlement transaction for it'
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: false, errorReason: 'authorization_used', errorMessage }), {
+        status: 200,
+      }),
+    )
+    const res = await app(fetchImpl as never).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(409)
+    const body = (await res.json()) as SettleErrorBody
+    expect(body).toMatchObject({ success: false, errorReason: 'authorization_used', errorMessage })
+    expect(body).not.toMatchObject({ ok: true })
+  })
 })
 
 describe('the direct endpoint', () => {
