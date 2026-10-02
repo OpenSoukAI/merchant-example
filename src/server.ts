@@ -3,9 +3,15 @@ import { createPublicClient, http } from 'viem'
 import { Hono } from 'hono'
 import { loadConfig, type Address, type Config } from './config.ts'
 import { directApp } from './direct-endpoint.ts'
-import { referralApp } from './referral-endpoint.ts'
+import { referralApp, type ReceiptStatus } from './referral-endpoint.ts'
 import { createSettlementSigner, type SettlementSigner } from './settlement-auth.ts'
 import { createSplitRouterResolver, registryRead } from './split-router.ts'
+
+/**
+ * The buyer's client allows 90 s end-to-end and settle can itself take up to
+ * 60 s, so this bound must leave headroom rather than add a second 60 s wait.
+ */
+const RECEIPT_WAIT_MS = 20_000
 
 export function createServer(
   cfg: Config,
@@ -13,15 +19,29 @@ export function createServer(
     resolveSplitRouter?: () => Promise<Address>
     fetchImpl?: typeof fetch
     signer?: SettlementSigner
+    receiptStatus?: ReceiptStatus
   } = {},
 ): Hono {
+  // Built once and reused for both the registry resolver and the receipt check,
+  // rather than one throwaway client per concern.
+  const client = createPublicClient({ transport: http(cfg.rpcUrl) })
+
   const resolveSplitRouter =
     deps.resolveSplitRouter ??
     createSplitRouterResolver({
-      read: registryRead(
-        createPublicClient({ transport: http(cfg.rpcUrl) }) as never,
-        cfg.addressRegistry,
-      ),
+      read: registryRead(client as never, cfg.addressRegistry),
+    })
+
+  const receiptStatus: ReceiptStatus =
+    deps.receiptStatus ??
+    (async (hash) => {
+      try {
+        const r = await client.waitForTransactionReceipt({ hash, timeout: RECEIPT_WAIT_MS })
+        return r.status
+      } catch (err) {
+        console.error('receipt check failed for', hash, err)
+        return null
+      }
     })
 
   const app = new Hono()
@@ -29,7 +49,11 @@ export function createServer(
   // /buy and nothing under it, and cannot shadow the referral route.
   app.route(
     '/buy/referral',
-    referralApp(cfg, resolveSplitRouter, { fetchImpl: deps.fetchImpl, signer: deps.signer }),
+    referralApp(cfg, resolveSplitRouter, {
+      fetchImpl: deps.fetchImpl,
+      signer: deps.signer,
+      receiptStatus,
+    }),
   )
   app.route('/buy', directApp(cfg))
   return app

@@ -10,6 +10,12 @@ import {
 } from './settle.ts'
 
 /**
+ * Checks whether a broadcast transaction confirmed within a bounded wait. `null`
+ * covers both a still-pending receipt at the bound and the read itself failing.
+ */
+export type ReceiptStatus = (hash: `0x${string}`) => Promise<'success' | 'reverted' | null>
+
+/**
  * The referral route. One handler, registered on both methods, with exactly one
  * branch: is this the probe for a 402, or the retry carrying a payment?
  *
@@ -21,7 +27,7 @@ import {
 export function referralApp(
   cfg: Config,
   resolveSplitRouter: () => Promise<Address>,
-  deps: { fetchImpl?: typeof fetch; signer?: SettlementSigner } = {},
+  deps: { fetchImpl?: typeof fetch; signer?: SettlementSigner; receiptStatus?: ReceiptStatus } = {},
 ): Hono {
   // Built once at startup, not per request: a malformed key then fails the process instead of
   // every buyer, and the address is available to log for the SETTLEMENT_SIGNER_ROLE check.
@@ -83,6 +89,35 @@ export function referralApp(
       fetchImpl: deps.fetchImpl,
     })
     if (!result.ok) {
+      // `settle_pending` carries a broadcast hash whose outcome the facilitator
+      // gave up waiting on. The receipt itself is authoritative, so a bounded
+      // local check — not the facilitator's silence — decides success or revert.
+      if (result.reason === 'settle_pending' && result.transaction) {
+        const status = await (
+          deps.receiptStatus?.(result.transaction as `0x${string}`) ?? Promise.resolve(null)
+        ).catch(() => null)
+        if (status === 'success') {
+          return c.json({
+            ok: true,
+            transaction: result.transaction,
+            resource: 'your paid response goes here',
+          })
+        }
+        if (status === 'reverted') {
+          // A reverted route tx means the authorization was never consumed: no
+          // funds moved, so this is a real refusal, not an indeterminate outcome.
+          return c.json(
+            {
+              success: false,
+              errorReason: 'settle_failed',
+              errorMessage: 'settlement transaction reverted; no funds moved',
+            },
+            402,
+          )
+        }
+        // Still unconfirmed, or the read itself failed: fall through to the
+        // ordinary indeterminate body below.
+      }
       return c.json(
         {
           success: false,
@@ -96,6 +131,9 @@ export function referralApp(
           retryable: result.retryable,
           requiredAuthorizationType: result.requiredAuthorizationType,
           setup_url: result.setup_url,
+          // The settle_pending hash, so a 504 still lets the caller check the
+          // transaction later instead of losing track of it.
+          transaction: result.transaction,
         },
         // 402 asks the buyer to pay, so only a refusal — the facilitator answered
         // and said no — may use it. When the facilitator did not answer, the
