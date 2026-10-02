@@ -141,7 +141,7 @@ export function referralApp(
         // over a fresh nonce and pays twice. 504 says what is actually true: the
         // outcome is unknown. `ok: false` either way, so the product is never
         // served on an unconfirmed payment. authorization_used gets 409: this
-        // authorization already paid, so a 402 would ask the buyer to pay again.
+        // authorization was already used (normally a settled payment), so a 402 would ask the buyer to pay again.
         result.reason === 'authorization_used' ? 409 : INDETERMINATE_REASONS.has(result.reason) ? 504 : 402,
       )
     }
