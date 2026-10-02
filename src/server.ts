@@ -13,6 +13,28 @@ import { createSplitRouterResolver, registryRead } from './split-router.ts'
  */
 const RECEIPT_WAIT_MS = 20_000
 
+/**
+ * The facilitator's EOAs are shared across merchants, so another buyer's route() can take a stuck
+ * tx's nonce. viem's replacement detection would then return THAT receipt; only this hash counts.
+ */
+export function createReceiptStatus(client: {
+  waitForTransactionReceipt: (args: {
+    hash: `0x${string}`
+    timeout: number
+    checkReplacement: boolean
+  }) => Promise<{ status: 'success' | 'reverted'; transactionHash: string }>
+}): ReceiptStatus {
+  return async (hash) => {
+    try {
+      const r = await client.waitForTransactionReceipt({ hash, timeout: RECEIPT_WAIT_MS, checkReplacement: false })
+      return r.transactionHash.toLowerCase() === hash.toLowerCase() ? r.status : null
+    } catch (err) {
+      console.error('receipt check failed for', hash, err)
+      return null
+    }
+  }
+}
+
 export function createServer(
   cfg: Config,
   deps: {
@@ -32,17 +54,7 @@ export function createServer(
       read: registryRead(client as never, cfg.addressRegistry),
     })
 
-  const receiptStatus: ReceiptStatus =
-    deps.receiptStatus ??
-    (async (hash) => {
-      try {
-        const r = await client.waitForTransactionReceipt({ hash, timeout: RECEIPT_WAIT_MS })
-        return r.status
-      } catch (err) {
-        console.error('receipt check failed for', hash, err)
-        return null
-      }
-    })
+  const receiptStatus: ReceiptStatus = deps.receiptStatus ?? createReceiptStatus(client as never)
 
   const app = new Hono()
   // Mount order is free here: `directApp` registers only '/', so at /buy it matches
