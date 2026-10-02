@@ -224,6 +224,34 @@ describe('settle', () => {
     expect(result.requiredAuthorizationType).toBeUndefined()
   })
 
+  it('keeps the broadcast hash on settle_pending, since the outcome is unconfirmed', async () => {
+    // The facilitator's answer after its own 45s receipt wait: broadcast but not
+    // confirmed. Dropping the hash here would make the payment unrecoverable.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: false,
+        errorReason: 'settle_pending',
+        errorMessage:
+          'transaction broadcast; outcome not confirmed — do not resubmit this payment, check the transaction',
+        transaction: '0xabc123',
+      }),
+    )
+    const result = await settle({
+      facilitatorUrl: 'http://f',
+      paymentPayload: {},
+      paymentRequirements: requirements,
+      signer: testSigner,
+      fetchImpl: fetchImpl as never,
+    })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'settle_pending',
+      message:
+        'transaction broadcast; outcome not confirmed — do not resubmit this payment, check the transaction',
+      transaction: '0xabc123',
+    })
+  })
+
   it("hands the facilitator's own explanation back on a 400 envelope error", async () => {
     // The real 400 shape. Both of the facilitator's 400 branches — a body it cannot
     // bind, and a wrong x402Version — answer with exactly these three fields, and

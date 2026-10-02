@@ -54,6 +54,10 @@ export type SettleFailure = {
    * 402's `extensions`.
    */
   setup_url?: string
+  /**
+   * Set on `settle_pending`: the broadcast hash, the outcome still unconfirmed.
+   */
+  transaction?: string
 }
 
 /**
@@ -61,11 +65,14 @@ export type SettleFailure = {
  * answered, broke, or answered something unreadable. The on-chain transfer may
  * have landed anyway, so a caller must not be invited to retry — a retry is a
  * second signature over a fresh nonce, which is a second payment.
+ * `settle_pending` joins these for the same reason: the facilitator broadcast
+ * the transaction but gave up waiting on its own receipt deadline.
  */
 export const INDETERMINATE_REASONS: ReadonlySet<string> = new Set([
   'facilitator_timeout',
   'facilitator_unavailable',
   'malformed_response',
+  'settle_pending',
 ])
 
 /**
@@ -190,5 +197,6 @@ export async function settle(args: {
     retryable: body.retryable,
     requiredAuthorizationType: body.requiredAuthorizationType,
     setup_url: body.setup_url,
+    transaction: body.transaction,
   }
 }

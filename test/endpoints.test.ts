@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { loadConfig } from '../src/config.ts'
 import { createServer } from '../src/server.ts'
+import type { ReceiptStatus } from '../src/referral-endpoint.ts'
 
 const cfg = loadConfig({
   MERCHANT_RPC_URL: 'http://127.0.0.1:8545',
@@ -16,8 +17,8 @@ const cfg = loadConfig({
   MERCHANT_SIGNER_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
 })
 const ROUTER = '0x4444444444444444444444444444444444444444'
-const app = (fetchImpl?: typeof fetch) =>
-  createServer(cfg, { resolveSplitRouter: async () => ROUTER as never, fetchImpl })
+const app = (fetchImpl?: typeof fetch, receiptStatus?: ReceiptStatus) =>
+  createServer(cfg, { resolveSplitRouter: async () => ROUTER as never, fetchImpl, receiptStatus })
 
 // Narrow shapes for `res.json()`, which types as `unknown` here (no DOM lib —
 // see ruling R14) — just enough of each body for the assertions that read it.
@@ -187,6 +188,83 @@ describe('the referral endpoint', () => {
       headers: { 'X-PAYMENT': payment },
     })
     expect(res.status).toBe(402) // treated as no payment at all
+  })
+})
+
+describe('the referral endpoint, settle_pending', () => {
+  const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
+  const pendingResponse = (transaction?: string) =>
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errorReason: 'settle_pending',
+          errorMessage:
+            'transaction broadcast; outcome not confirmed — do not resubmit this payment, check the transaction',
+          ...(transaction ? { transaction } : {}),
+        }),
+        { status: 200 },
+      ),
+    )
+
+  it('serves the resource when the receipt confirms success', async () => {
+    const fetchImpl = pendingResponse('0xabc123')
+    const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue('success')
+    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ ok: true, transaction: '0xabc123' })
+  })
+
+  it('answers 504 with the hash when the receipt is still unconfirmed after the bound', async () => {
+    const fetchImpl = pendingResponse('0xabc123')
+    const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue(null)
+    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(504)
+    const body = (await res.json()) as SettleErrorBody & { transaction?: string }
+    expect(body.errorReason).toBe('settle_pending')
+    expect(body.transaction).toBe('0xabc123')
+  })
+
+  it('answers 402 and does not serve when the receipt shows a revert', async () => {
+    const fetchImpl = pendingResponse('0xabc123')
+    const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue('reverted')
+    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(402)
+    const body = (await res.json()) as SettleErrorBody
+    expect(body.errorReason).toBe('settle_failed')
+    expect(body).not.toMatchObject({ ok: true })
+  })
+
+  it('answers 504 when the receipt check itself fails', async () => {
+    const fetchImpl = pendingResponse('0xabc123')
+    const receiptStatus: ReceiptStatus = vi.fn().mockRejectedValue(new Error('rpc down'))
+    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(504)
+    const body = (await res.json()) as SettleErrorBody
+    expect(body.errorReason).toBe('settle_pending')
+  })
+
+  it('answers 504 without calling receiptStatus when there is no hash to check', async () => {
+    const fetchImpl = pendingResponse(undefined)
+    const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue('success')
+    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(res.status).toBe(504)
+    expect(receiptStatus).not.toHaveBeenCalled()
   })
 })
 
