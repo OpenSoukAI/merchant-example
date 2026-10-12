@@ -1,0 +1,11 @@
+# Secrets never enter a layer, not even a builder-stage one.
+.env
+.env.*
+
+# Installed fresh in the deps stage from package-lock.json; copying the host's
+# node_modules would both bloat the context and risk a wrong-platform binary.
+node_modules
+
+.git
+test
+dist
