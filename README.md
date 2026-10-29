@@ -2,7 +2,7 @@
 
 A worked OpenSouk referral endpoint, in seven small TypeScript modules.
 
-Start with the [merchant quickstart](https://docs.opensouk.ai/quickstart/merchant) — it is
+Start with [Set up referrals](https://docs.opensouk.ai/merchants/set-up-referrals) — it is
 the integration end to end. This repo is the executable version of it.
 
 ## Requirements
