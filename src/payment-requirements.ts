@@ -22,11 +22,12 @@ export type PaymentRequirements = {
     /** Non-standard, and how a tool-less buyer finds the facilitator to settle through. */
     facilitatorUrl: string
     /**
-     * Non-standard. The product this endpoint sells. A buyer may pay here with a ref link
-     * minted for ANY product of this merchant; the facilitator settles on this id, at this
-     * product's commission rate. Omit it and such a sale is recorded as the link's product.
+     * Non-standard. The path of the request being answered, which must be the path of the
+     * product's registered `endpoint_url`. A buyer may pay here with a ref link minted for ANY
+     * product of this merchant; the facilitator records the product registered at this path,
+     * at its commission rate, and refuses a path the merchant never registered.
      */
-    productId: Address
+    endpoint: string
   }
 }
 
@@ -41,7 +42,7 @@ export type PaymentRequired = {
   }
 }
 
-export function buildRequirements(cfg: Config, payTo: Address): PaymentRequirements {
+export function buildRequirements(cfg: Config, payTo: Address, endpoint: string): PaymentRequirements {
   return {
     scheme: 'exact',
     network: cfg.network,
@@ -54,7 +55,7 @@ export function buildRequirements(cfg: Config, payTo: Address): PaymentRequireme
       version: '2',
       authorizationType: AUTHORIZATION_TYPE,
       facilitatorUrl: cfg.facilitatorUrl,
-      productId: cfg.productId,
+      endpoint,
     },
   }
 }
@@ -62,10 +63,12 @@ export function buildRequirements(cfg: Config, payTo: Address): PaymentRequireme
 export function build402(args: {
   cfg: Config
   payTo: Address
+  /** The path of the request being answered; see `extra.endpoint`. */
+  endpoint: string
   attributionToken: string
   buyerAgentId: string | null
 }): PaymentRequired {
-  const { cfg, payTo, attributionToken, buyerAgentId } = args
+  const { cfg, payTo, endpoint, attributionToken, buyerAgentId } = args
   return {
     x402Version: 2,
     resource: {
@@ -73,7 +76,7 @@ export function build402(args: {
       description: 'Purchase via referral',
       mimeType: 'application/json',
     },
-    accepts: [buildRequirements(cfg, payTo)],
+    accepts: [buildRequirements(cfg, payTo, endpoint)],
     extensions: {
       attributionToken,
       // Omitted rather than empty: an absent id is what marks an agent-less

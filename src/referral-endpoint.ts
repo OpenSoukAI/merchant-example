@@ -59,7 +59,10 @@ export function referralApp(
       )
     }
 
-    const requirements = buildRequirements(cfg, payTo)
+    // The path, not the full URL: the facilitator matches on the path alone, and the query
+    // string is the buyer's input, which has no business leaving this server.
+    const endpoint = c.req.path
+    const requirements = buildRequirements(cfg, payTo, endpoint)
     const raw = c.req.header(PAYMENT_HEADER)
 
     if (raw === undefined) {
@@ -67,6 +70,7 @@ export function referralApp(
         build402({
           cfg,
           payTo,
+          endpoint,
           attributionToken: c.req.header('X-Referrer-Token') ?? '',
           buyerAgentId: c.req.header('X-Referrer-Buyer-Agent-Id') ?? null,
         }),
