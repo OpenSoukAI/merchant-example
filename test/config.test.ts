@@ -13,7 +13,6 @@ const complete = {
   MERCHANT_API_URL: 'http://127.0.0.1:8080',
   MERCHANT_PUBLIC_URL: 'http://127.0.0.1:8083',
   MERCHANT_DIRECT_PAY_TO: '0x3333333333333333333333333333333333333333',
-  MERCHANT_PRODUCT_ID: '0x00000000000000000000000000000000000000000000000000000000000000aa',
   MERCHANT_SIGNER_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
 }
 
@@ -23,19 +22,13 @@ describe('loadConfig', () => {
     expect(cfg.port).toBe(8083)
     expect(cfg.network).toBe('eip155:8453')
     expect(cfg.priceBaseUnits).toBe('1000000')
-    expect(cfg.productId).toBe('0x00000000000000000000000000000000000000000000000000000000000000aa')
   })
 
-  // The id the merchant chose at add_product, and what the facilitator compares against
-  // the token's merchant catalogue. Normalised so a merchant pasting uppercase or bare hex
-  // emits the same bytes the protocol stored (REF-315).
-  it('normalises the product id to lowercase 0x-hex, accepting uppercase and a missing prefix', () => {
-    expect(loadConfig({ ...complete, MERCHANT_PRODUCT_ID: '00000000000000000000000000000000000000000000000000000000000000AA' }).productId).toBe(
-      '0x00000000000000000000000000000000000000000000000000000000000000aa',
-    )
-    expect(loadConfig({ ...complete, MERCHANT_PRODUCT_ID: '0X00000000000000000000000000000000000000000000000000000000000000AA' }).productId).toBe(
-      '0x00000000000000000000000000000000000000000000000000000000000000aa',
-    )
+  // REF-563: the 402 reports its own path, so no product id is configured. A deployment that
+  // still sets the old variable must keep starting.
+  it('ignores a leftover MERCHANT_PRODUCT_ID', () => {
+    const cfg = loadConfig({ ...complete, MERCHANT_PRODUCT_ID: 'junk' })
+    expect('productId' in cfg).toBe(false)
   })
 
   // REF-324. Required, not optional: a reference merchant that can start without a signing
@@ -60,12 +53,6 @@ describe('loadConfig', () => {
     expect(message).not.toContain('ab'.repeat(31))
   })
 
-  it('rejects a product id that is not 32 bytes of hex', () => {
-    for (const bad of ['0xaa', '0xzz', '0x' + 'aa'.repeat(33), 'widget']) {
-      expect(() => loadConfig({ ...complete, MERCHANT_PRODUCT_ID: bad })).toThrow(/MERCHANT_PRODUCT_ID/)
-    }
-  })
-
   it('defaults the port but nothing else', () => {
     const { MERCHANT_PORT, ...rest } = complete
     expect(loadConfig(rest).port).toBe(8083)
@@ -84,7 +71,6 @@ describe('loadConfig', () => {
         'MERCHANT_FACILITATOR_URL',
         'MERCHANT_NETWORK',
         'MERCHANT_PRICE_BASE_UNITS',
-        'MERCHANT_PRODUCT_ID',
         'MERCHANT_PUBLIC_URL',
         'MERCHANT_RPC_URL',
         'MERCHANT_SIGNER_PRIVATE_KEY',

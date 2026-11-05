@@ -9,7 +9,6 @@ const cfg = loadConfig({
   MERCHANT_USDC: '0x2222222222222222222222222222222222222222',
   MERCHANT_NETWORK: 'eip155:8453',
   MERCHANT_PRICE_BASE_UNITS: '1000000',
-  MERCHANT_PRODUCT_ID: '0x00000000000000000000000000000000000000000000000000000000000000aa',
   MERCHANT_FACILITATOR_URL: 'http://f',
   MERCHANT_API_URL: 'http://api',
   MERCHANT_PUBLIC_URL: 'https://api.example.com',
@@ -23,7 +22,7 @@ const app = (fetchImpl?: typeof fetch, receiptStatus?: ReceiptStatus) =>
 // Narrow shapes for `res.json()`, which types as `unknown` here (no DOM lib —
 // see ruling R14) — just enough of each body for the assertions that read it.
 type PaymentRequiredBody = {
-  accepts: [{ payTo: string; extra?: { productId?: string } }]
+  accepts: [{ payTo: string; extra?: { endpoint?: string; productId?: string } }]
   extensions?: { attributionToken?: string; buyerAgentId?: string }
 }
 type SettleErrorBody = {
@@ -59,14 +58,38 @@ describe('the referral endpoint', () => {
     expect(body.extensions?.buyerAgentId).toBe('7')
   })
 
-  it('names the product it sells in the 402, whatever ref link the buyer presented', async () => {
-    // A ref link for a sibling product arrives here; the facilitator settles on THIS id.
+  it('reports the path it serves in the 402, whatever ref link the buyer presented', async () => {
+    // A ref link for a sibling product arrives here; the facilitator settles on the product
+    // registered at THIS path.
     const res = await app().request('/buy/referral', {
       method: 'POST',
       headers: { 'X-Referrer-Token': 'eyJ2Ijo0' },
     })
     const body = (await res.json()) as PaymentRequiredBody
-    expect(body.accepts[0].extra?.productId).toBe(cfg.productId)
+    expect(body.accepts[0].extra?.endpoint).toBe('/buy/referral')
+    expect(body.accepts[0].extra).not.toHaveProperty('productId')
+  })
+
+  it('reports the path only, never the buyer’s query string', async () => {
+    const res = await app().request('/buy/referral?q=secret&x=1', { method: 'GET' })
+    expect(((await res.json()) as PaymentRequiredBody).accepts[0].extra?.endpoint).toBe('/buy/referral')
+  })
+
+  it('sends the facilitator the same extra.endpoint as the 402, and no productId', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, transaction: '0xabc123' }), { status: 200 }),
+    )
+    const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
+    await app(fetchImpl as never).request('/buy/referral?q=1', {
+      method: 'POST',
+      headers: { 'PAYMENT-SIGNATURE': payment },
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    const sent = JSON.parse(String((fetchImpl.mock.calls[0]?.[1] as RequestInit).body)) as {
+      paymentRequirements: { extra: Record<string, unknown> }
+    }
+    expect(sent.paymentRequirements.extra.endpoint).toBe('/buy/referral')
+    expect(sent.paymentRequirements.extra).not.toHaveProperty('productId')
   })
 
   it('returns the settle transaction hash, which buyer tooling requires', async () => {
@@ -294,6 +317,7 @@ describe('the direct endpoint', () => {
     expect(body.accepts[0].payTo).toBe(cfg.directPayTo)
     expect(body.extensions).toBeUndefined()
     expect(body.accepts[0].extra?.productId).toBeUndefined()
+    expect(body.accepts[0].extra?.endpoint).toBeUndefined()
   })
 })
 
