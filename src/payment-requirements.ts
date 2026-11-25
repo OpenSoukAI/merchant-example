@@ -72,7 +72,7 @@ export function build402(args: {
   return {
     x402Version: 2,
     resource: {
-      url: `${cfg.publicUrl}/buy/referral`,
+      url: `${cfg.publicUrl}/ref/buy`,
       description: 'Purchase via referral',
       mimeType: 'application/json',
     },

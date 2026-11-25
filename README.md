@@ -41,20 +41,21 @@ Two different floors, for two different reasons:
 Two routes. `/buy` is the merchant's ordinary paid route, and this repo never modifies it. Its
 `payTo` is the merchant's own wallet and it carries no attribution fields.
 
-`/buy/referral` is the copy: same product, same price, same auth, differing only in `payTo`, the
-facilitator, the echoed `extensions`, `extra.endpoint`, and the two headers that sign the
+`/ref/buy` is the copy, named after `/buy` with `ref` after the base path, as
+[Set up referrals](https://docs.opensouk.ai/merchants/set-up-referrals) recommends. Same product,
+same price, same auth, differing only in `payTo`, the facilitator, the echoed `extensions`, `extra.endpoint`, and the two headers that sign the
 settlement call. **Those five things are the whole integration.** The rest of what `src/referral-endpoint.ts` adds over `src/direct-endpoint.ts` is
 the ordinary x402 retry handshake — decode `PAYMENT-SIGNATURE`, settle, then serve — which
 `direct-endpoint.ts` omits and a merchant already selling over x402 already has.
 
-`extra.endpoint` is the path of the request you are answering (`/buy/referral` here), in the 402
+`extra.endpoint` is the path of the request you are answering (`/ref/buy` here), in the 402
 and again at settlement. A buyer may pay this endpoint with a ref link minted for **any** of your
 products; the facilitator records the product whose registered `endpoint_url` has this path, at
 that product's commission rate. It must be the path you registered, or the sale is refused. Send
 the path, not the full URL: the query string is the buyer's input. Leave the field out and every
 sale here is recorded as the ref link's product.
 
-You register `/buy/referral` as the product's `endpoint_url`, so it is where ref links send buyers.
+You register `/ref/buy` as the product's `endpoint_url`, so it is where ref links send buyers.
 
 ## The settlement signer
 
@@ -100,7 +101,7 @@ zero addresses and a `eip155:0` network — not any particular chain's real valu
 
 ```bash
 # the probe path: a 402 naming the split router
-curl -s -X POST localhost:8083/buy/referral | jq '.accepts[0].payTo, .extensions'
+curl -s -X POST localhost:8083/ref/buy | jq '.accepts[0].payTo, .extensions'
 ```
 
 ```

@@ -35,7 +35,7 @@ type SettleErrorBody = {
 
 describe('the referral endpoint', () => {
   it('answers 402 on POST, which is what buyer tooling sends', async () => {
-    const res = await app().request('/buy/referral', { method: 'POST' })
+    const res = await app().request('/ref/buy', { method: 'POST' })
     expect(res.status).toBe(402)
     const body = (await res.json()) as PaymentRequiredBody
     expect(body.accepts[0].payTo).toBe(ROUTER)
@@ -43,13 +43,13 @@ describe('the referral endpoint', () => {
 
   it('answers 402 on GET, which is what the readiness probe sends', async () => {
     // mock-merchant registers POST only and therefore reports as not ready.
-    const res = await app().request('/buy/referral', { method: 'GET' })
+    const res = await app().request('/ref/buy', { method: 'GET' })
     expect(res.status).toBe(402)
     expect(((await res.json()) as PaymentRequiredBody).accepts[0].payTo).toBe(ROUTER)
   })
 
   it('echoes the referral headers into extensions', async () => {
-    const res = await app().request('/buy/referral', {
+    const res = await app().request('/ref/buy', {
       method: 'GET',
       headers: { 'X-Referrer-Token': 'eyJ2Ijo0', 'X-Referrer-Buyer-Agent-Id': '7' },
     })
@@ -61,18 +61,18 @@ describe('the referral endpoint', () => {
   it('reports the path it serves in the 402, whatever ref link the buyer presented', async () => {
     // A ref link for a sibling product arrives here; the facilitator settles on the product
     // registered at THIS path.
-    const res = await app().request('/buy/referral', {
+    const res = await app().request('/ref/buy', {
       method: 'POST',
       headers: { 'X-Referrer-Token': 'eyJ2Ijo0' },
     })
     const body = (await res.json()) as PaymentRequiredBody
-    expect(body.accepts[0].extra?.endpoint).toBe('/buy/referral')
+    expect(body.accepts[0].extra?.endpoint).toBe('/ref/buy')
     expect(body.accepts[0].extra).not.toHaveProperty('productId')
   })
 
   it('reports the path only, never the buyer’s query string', async () => {
-    const res = await app().request('/buy/referral?q=secret&x=1', { method: 'GET' })
-    expect(((await res.json()) as PaymentRequiredBody).accepts[0].extra?.endpoint).toBe('/buy/referral')
+    const res = await app().request('/ref/buy?q=secret&x=1', { method: 'GET' })
+    expect(((await res.json()) as PaymentRequiredBody).accepts[0].extra?.endpoint).toBe('/ref/buy')
   })
 
   it('sends the facilitator the same extra.endpoint as the 402, and no productId', async () => {
@@ -80,7 +80,7 @@ describe('the referral endpoint', () => {
       new Response(JSON.stringify({ success: true, transaction: '0xabc123' }), { status: 200 }),
     )
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
-    await app(fetchImpl as never).request('/buy/referral?q=1', {
+    await app(fetchImpl as never).request('/ref/buy?q=1', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -88,7 +88,7 @@ describe('the referral endpoint', () => {
     const sent = JSON.parse(String((fetchImpl.mock.calls[0]?.[1] as RequestInit).body)) as {
       paymentRequirements: { extra: Record<string, unknown> }
     }
-    expect(sent.paymentRequirements.extra.endpoint).toBe('/buy/referral')
+    expect(sent.paymentRequirements.extra.endpoint).toBe('/ref/buy')
     expect(sent.paymentRequirements.extra).not.toHaveProperty('productId')
   })
 
@@ -104,7 +104,7 @@ describe('the referral endpoint', () => {
       ),
     )
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
-    const res = await app(fetchImpl as unknown as typeof fetch).request('/buy/referral', {
+    const res = await app(fetchImpl as unknown as typeof fetch).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -120,7 +120,7 @@ describe('the referral endpoint', () => {
       new Response(JSON.stringify({ success: true }), { status: 200 }),
     )
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
-    const res = await app(fetchImpl as never).request('/buy/referral', {
+    const res = await app(fetchImpl as never).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -135,7 +135,7 @@ describe('the referral endpoint', () => {
       }),
     )
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
-    const res = await app(fetchImpl as never).request('/buy/referral', {
+    const res = await app(fetchImpl as never).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -150,7 +150,7 @@ describe('the referral endpoint', () => {
     // refusal gets 402. Neither serves the product.
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
     const send = (fetchImpl: unknown) =>
-      app(fetchImpl as never).request('/buy/referral', {
+      app(fetchImpl as never).request('/ref/buy', {
         method: 'POST',
         headers: { 'PAYMENT-SIGNATURE': payment },
       })
@@ -193,7 +193,7 @@ describe('the referral endpoint', () => {
       ),
     )
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
-    const res = await app(fetchImpl as never).request('/buy/referral', {
+    const res = await app(fetchImpl as never).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -206,7 +206,7 @@ describe('the referral endpoint', () => {
 
   it('ignores X-PAYMENT, the v1 header', async () => {
     const payment = Buffer.from(JSON.stringify({ x402Version: 2 })).toString('base64url')
-    const res = await app().request('/buy/referral', {
+    const res = await app().request('/ref/buy', {
       method: 'POST',
       headers: { 'X-PAYMENT': payment },
     })
@@ -233,7 +233,7 @@ describe('the referral endpoint, settle_pending', () => {
   it('serves the resource when the receipt confirms success', async () => {
     const fetchImpl = pendingResponse('0xabc123')
     const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue('success')
-    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+    const res = await app(fetchImpl as never, receiptStatus).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -244,7 +244,7 @@ describe('the referral endpoint, settle_pending', () => {
   it('answers 504 with the hash when the receipt is still unconfirmed after the bound', async () => {
     const fetchImpl = pendingResponse('0xabc123')
     const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue(null)
-    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+    const res = await app(fetchImpl as never, receiptStatus).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -257,7 +257,7 @@ describe('the referral endpoint, settle_pending', () => {
   it('answers 402 and does not serve when the receipt shows a revert', async () => {
     const fetchImpl = pendingResponse('0xabc123')
     const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue('reverted')
-    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+    const res = await app(fetchImpl as never, receiptStatus).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -270,7 +270,7 @@ describe('the referral endpoint, settle_pending', () => {
   it('answers 504 when the receipt check itself fails', async () => {
     const fetchImpl = pendingResponse('0xabc123')
     const receiptStatus: ReceiptStatus = vi.fn().mockRejectedValue(new Error('rpc down'))
-    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+    const res = await app(fetchImpl as never, receiptStatus).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -282,7 +282,7 @@ describe('the referral endpoint, settle_pending', () => {
   it('answers 504 without calling receiptStatus when there is no hash to check', async () => {
     const fetchImpl = pendingResponse(undefined)
     const receiptStatus: ReceiptStatus = vi.fn().mockResolvedValue('success')
-    const res = await app(fetchImpl as never, receiptStatus).request('/buy/referral', {
+    const res = await app(fetchImpl as never, receiptStatus).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -298,7 +298,7 @@ describe('the referral endpoint, settle_pending', () => {
         status: 200,
       }),
     )
-    const res = await app(fetchImpl as never).request('/buy/referral', {
+    const res = await app(fetchImpl as never).request('/ref/buy', {
       method: 'POST',
       headers: { 'PAYMENT-SIGNATURE': payment },
     })
@@ -334,7 +334,7 @@ describe('when the chain is unreachable', () => {
     })
 
   it('answers 503, not 500 — nothing was attempted, so retrying is safe', async () => {
-    const res = await broken().request('/buy/referral', { method: 'GET' })
+    const res = await broken().request('/ref/buy', { method: 'GET' })
     expect(res.status).toBe(503)
     expect((await res.json()) as { errorReason: string }).toMatchObject({
       success: false,
@@ -345,7 +345,7 @@ describe('when the chain is unreachable', () => {
   it('does not put the RPC URL in the buyer’s response', async () => {
     // viem's error names the endpoint it dialled. That belongs in the operator's
     // log, not in a body served to whoever called the paid route.
-    const res = await broken().request('/buy/referral', { method: 'GET' })
+    const res = await broken().request('/ref/buy', { method: 'GET' })
     expect(JSON.stringify(await res.json())).not.toContain(cfg.rpcUrl)
   })
 
