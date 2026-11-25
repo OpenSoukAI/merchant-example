@@ -57,10 +57,9 @@ export function createServer(
   const receiptStatus: ReceiptStatus = deps.receiptStatus ?? createReceiptStatus(client as never)
 
   const app = new Hono()
-  // Mount order is free here: `directApp` registers only '/', so at /buy it matches
-  // /buy and nothing under it, and cannot shadow the referral route.
+  // The two routes share no prefix, so mount order is free.
   app.route(
-    '/buy/referral',
+    '/ref/buy',
     referralApp(cfg, resolveSplitRouter, {
       fetchImpl: deps.fetchImpl,
       signer: deps.signer,
@@ -76,7 +75,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   serve({ fetch: createServer(cfg).fetch, port: cfg.port })
   console.log(`merchant-example listening on ${cfg.port}`)
   console.log(`  direct   POST ${cfg.publicUrl}/buy`)
-  console.log(`  referral GET/POST ${cfg.publicUrl}/buy/referral`)
+  console.log(`  referral GET/POST ${cfg.publicUrl}/ref/buy`)
   // Printed so an operator can check the grant landed on the key this process actually holds:
   // an ungranted signer is refused by the facilitator on every sale, flag or no flag.
   console.log(
